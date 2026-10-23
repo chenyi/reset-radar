@@ -84,3 +84,9 @@ scripts/backup-postgres.sh
 ```
 
 运行凭据、备份和验收截图存放在仓外。迁移与回滚见 [运维说明](docs/operations.md)，需求审批和群聊整理见 [项目流程](docs/project-workflow.md)。
+
+## 项目跟踪
+
+[在线站点](http://47.237.1.108/) · [问题与需求](https://github.com/chenyi/reset-radar/issues) · [项目看板](https://github.com/users/chenyi/projects/1) · [版本发布](https://github.com/chenyi/reset-radar/releases)
+
+[2026-10-23 独立页面测试与迁移验收记录](docs/qa/2026-10-23.md)。新需求先待审批，由所有者明确批准后开发。
