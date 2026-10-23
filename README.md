@@ -97,6 +97,6 @@ scripts/backup-postgres.sh
 
 翻译使用同一个个人新加坡百炼模型与共享 50 元月预算，先核对代金券，再锁定预算预留，保留 usage、请求 ID 和响应；关闭 AI 时不调用翻译。页面访问只读数据库。后台只翻译公开收录消息及证据，新帖新增翻译；历史手动处理入口是 `scripts/backfill_chinese.py`。
 
-[样式备选](http://47.237.1.108/style-options) 提供三种通知排版、三种时钟和三个机器人头像。默认采用清晰中文通知、实时北京时间指针钟和薄荷绿小钟机器人。通知 worker 可用 `NOTIFICATION_STYLE=clear|brief|bilingual` 切换排版；不配置时为 clear。
+[样式备选](http://47.237.1.108/style-options) 提供三种通知排版、三种时钟和三个机器人头像。默认采用清晰中文通知、轨道数字钟（有效预告显示预计时刻，无预告显示当前北京时间）和薄荷绿小钟机器人。通知 worker 可用 `NOTIFICATION_STYLE=clear|brief|bilingual` 切换排版；不配置时为 clear。
 
 生成素材与提示词见 [视觉素材说明](docs/visual-assets.md)。

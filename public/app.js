@@ -64,13 +64,13 @@ function renderHero() {
   renderCountdown();
 }
 function renderClock() {
-  const clock=new Date(Date.now()+8*60*60*1000), seconds=clock.getUTCSeconds();
-  const minute=clock.getUTCMinutes()+seconds/60, hour=clock.getUTCHours()%12+minute/60;
-  $('clock-hour')?.setAttribute('transform',`rotate(${hour*30} 120 120)`);
-  $('clock-minute')?.setAttribute('transform',`rotate(${minute*6} 120 120)`);
-  $('clock-second')?.setAttribute('transform',`rotate(${seconds*6} 120 120)`);
-  if($('clock-label'))$('clock-label').textContent=`北京时间 ${String(clock.getUTCHours()).padStart(2,'0')}:${String(clock.getUTCMinutes()).padStart(2,'0')}`;
+  const active=upcoming(), clock=new Date((active?Date.parse(active.target_at):Date.now())+8*60*60*1000);
+  const time=`${String(clock.getUTCHours()).padStart(2,'0')}:${String(clock.getUTCMinutes()).padStart(2,'0')}`;
+  $('orbit-time').textContent=time;
+  $('orbit-caption').textContent=active?`${active.time_kind==='deadline'?'预计截止':'预计时间'} · 北京时间`:'当前时间 · 北京时间';
+  $('clock-label').textContent=active?`${fmt(active.target_at)} · 北京时间`:'等待下一条明确预告';
 }
+
 function renderCountdown() {
   renderClock();
   if(!model)return;
