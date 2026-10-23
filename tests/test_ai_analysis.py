@@ -58,6 +58,15 @@ class EvidenceTests(unittest.TestCase):
         result=ai_analysis.validate(e,self.posts,{'1'})
         self.assertEqual((result['state'],result['category']),('completed','completed'))
 
+    def test_future_reset_with_past_relief_is_still_a_forecast(self):
+        text='Codex usage limits will be fully reset again in the next hour.\n\nImmediate relief: We reset usage limits while rolling out the fixes.'
+        self.posts['1']['text']=text
+        e={'post_id':'1','relevant':True,'category':'forecast','anchor_id':'1','type':'reset','state':'announced',
+           'evidence':[{'post_id':'1','quote':text,'role':'update'}], 'time':{'phrase':'in the next hour','date_ref_id':'1'}}
+        result=ai_analysis.validate(e,self.posts,{'1'})
+        self.assertEqual((result['state'],result['category']),('scheduled','forecast'))
+        self.assertEqual(result['expected_at'],'2026-10-23T05:47:34Z')
+
     def test_street_card_joke_and_cash_compensation_are_excluded(self):
         for text in ["People have escaped the TL and are asking me for resets on the street now. I’ll make little cards to hand out", "If this affected you, we'll add credits to your account."]:
             self.posts['1']['text']=text
