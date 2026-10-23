@@ -226,13 +226,14 @@ def rss(data):
         message = 'post_id' in event
         identity = event['post_id'] if message else event['event_id']
         labels = {'forecast':'重置预告','progress':'重置进展','completed':'重置完成','credit':'重置卡','correction':'取消／更正'}
-        ET.SubElement(item, 'title').text = labels.get(event.get('category'), '') + ' · ' + event['text'][:120] if message else event_title(event)
+        reading = event.get('text_zh') or '中文译文正在整理，请查看作者原文。'
+        ET.SubElement(item, 'title').text = labels.get(event.get('category'), '') + ' · ' + reading[:120] if message else event_title(event)
         ET.SubElement(item, 'link').text = ORIGIN + ('/#post/' if message else '/#event/') + identity
         ET.SubElement(item, 'guid', isPermaLink='false').text = 'reset-radar:' + identity
         published = timestamp(event.get('created_at') if message else event.get('published_at'))
         if published:
             ET.SubElement(item, 'pubDate').text = format_datetime(datetime.fromtimestamp(published, timezone.utc))
-        ET.SubElement(item, 'description').text = (event.get('text', event.get('summary', '')) + ' 来源：Tibo 公开原帖，经 RSS 镜像采集。' +
+        ET.SubElement(item, 'description').text = ((reading if message else event.get('summary', '')) + ' 来源：Tibo 公开原帖，经 RSS 镜像采集。' +
             SCOPE_LABELS.get(event.get('scope'), '适用范围未明确') + '。公告不代表个人额度到账。原帖：' + (event['url'] if message else ' '.join(event.get('source_urls', []))))
     return ET.tostring(root, encoding='utf-8', xml_declaration=True)
 

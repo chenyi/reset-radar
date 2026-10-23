@@ -24,10 +24,11 @@ def render(message, style='clear'):
     note='公开公告不保证个人额度到账，请在自己的账号核对。'
     if message['kind']=='reminder':
         note='这是公告时间前的提醒，尚不能据此认定重置已完成。'
+    preview='**样式预览 · 不是新公告**\n\n' if message.get('preview') else ''
     if style=='brief':
-        return f'{icon} **{title}**\n\n{label}：{when}\n\n{chinese}\n\n{links}\n\n> {note}'
+        return preview+f'{icon} **{title}**\n\n{label}：{when}\n\n{chinese}\n\n{links}\n\n> {note}'
     result=f'### {icon} {title}\n\n**{label}**\n> {when}\n\n**Tibo 消息 · 中文译文**\n\n{chinese}\n\n'
     if style=='bilingual':
         result+='**作者原文**\n\n'+post.get('text','')+'\n\n'
     result=result+links+'\n\n---\n\n'+note
-    return ('**样式预览 · 不是新公告**\n\n'+result) if message.get('preview') else result
+    return preview+result

@@ -101,6 +101,7 @@ class NotificationStylesTest(unittest.TestCase):
         self.assertIn('Landing tomorrow',render(self.message,'bilingual'))
         self.message['preview']=True
         self.assertTrue(render(self.message).startswith('**样式预览 · 不是新公告**'))
+        self.assertTrue(render(self.message,'brief').startswith('**样式预览 · 不是新公告**'))
 
     def test_missing_translation_has_chinese_fallback(self):
         del self.message['post']['text_zh']
