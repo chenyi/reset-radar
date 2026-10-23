@@ -26,6 +26,10 @@ class EvidenceTests(unittest.TestCase):
         value = {'phrase': self.posts['1']['text'], 'date_ref_id': '1', 'clock': '10:00', 'timezone': 'PT'}
         self.assertEqual(ai_analysis.time_from_evidence(value, self.posts), '2026-10-23T17:00:00Z')
 
+    def test_relative_window_comes_from_original_timestamp(self):
+        self.posts['1']['text']='Landing within the next 2 hours'
+        self.assertEqual(ai_analysis.time_from_evidence({'phrase':self.posts['1']['text'],'date_ref_id':'1'},self.posts),'2026-10-23T06:47:34Z')
+
     def test_model_cannot_invent_time_or_clock(self):
         value = {'phrase': self.posts['1']['text'], 'date_ref_id': '1', 'clock': '12:00', 'timezone': 'PST'}
         self.assertEqual(ai_analysis.time_from_evidence(value, self.posts), '2026-10-23T18:00:00Z')
@@ -133,6 +137,25 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(message['text'],"We've reset all limits.")
         self.assertEqual(message['category'],'completed')
         self.assertEqual(message['event_id'],'tibo-'+post_id)
+
+    def test_long_context_shrinks_batch_before_inference(self):
+        post=dict(self.db.execute('SELECT * FROM posts').fetchone())
+        with self.db:
+            for index in range(25):
+                value={**post,'post_id':str(2113492502355562876+index),'text':'Long product announcement. '*250}
+                storage.save_posts(self.db,[value])
+        def respond(request,**kwargs):
+            self.assertLessEqual(len(request.data),32000)
+            body=json.loads(request.data)
+            targets=json.loads(body['messages'][1]['content'])['targets']
+            self.assertLess(len(targets),20)
+            content={'analyses':[{'post_id':ident,'relevant':False,'reason':'普通产品消息'} for ident in targets]}
+            result={'id':'bounded','choices':[{'message':{'content':json.dumps(content)}}],'usage':{'prompt_tokens':100,'completion_tokens':20}}
+            response=MagicMock();response.__enter__.return_value.read.return_value=json.dumps(result).encode()
+            return response
+        with patch.object(billing_guard,'verify'),patch('ai_analysis.urllib.request.urlopen',side_effect=respond) as request:
+            self.assertTrue(ai_analysis.analyze_batch(self.db))
+            self.assertEqual(request.call_count,1)
 
 
 if __name__ == '__main__':

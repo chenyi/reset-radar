@@ -59,7 +59,7 @@ def time_from_evidence(value, posts):
     if not post or not phrase or phrase not in post['text']:
         return None
     published = datetime.fromisoformat(post['created_at'].replace('Z', '+00:00'))
-    duration = re.search(r'\b(?:in|within)\s+(\d+)\s+(hours?|minutes?)\b', phrase, re.I)
+    duration = re.search(r'\b(?:in|within)\s+(?:the\s+next\s+)?(\d+)\s+(hours?|minutes?)\b', phrase, re.I)
     if duration:
         amount = int(duration[1])
         if amount > 72:
@@ -193,7 +193,7 @@ def make_input(db, targets):
         value['text'] = value['text'][:4000]
         value['reply_to_author'] = reply[1] if reply else None
         value['quoted_text'] = (post['quoted_text'] or '')[:1200]
-        if len(json.dumps(context + [value], ensure_ascii=False).encode()) > 24000:
+        if len(json.dumps(context + [value], ensure_ascii=False).encode()) > 16000:
             continue
         context.append(value)
     known = [dict(x) for x in db.execute("""SELECT e.event_id,e.title,e.state,e.published_at FROM reset_events e
@@ -269,14 +269,18 @@ def analyze_batch(db):
             set_state(db,'ai_status',{**status,'enabled':True,'reason':'当前归档已分析，等待新原帖'})
         return False
     billing_guard.verify(db)
-    document, supplied = make_input(db, targets)
-    body = {'model': MODEL, 'messages': [{'role': 'system', 'content': PROMPT},
-            {'role': 'user', 'content': json.dumps(document, ensure_ascii=False)}],
-            'enable_thinking': False, 'enable_search': False, 'max_tokens': 4096,
-            'temperature': 0.1, 'response_format': output_schema([p['post_id'] for p in targets], list(supplied))}
-    raw = json.dumps(body, ensure_ascii=False).encode()
-    if len(raw) > 32000:
-        raise ValueError('Analysis input exceeds verified pricing tier')
+    while True:
+        document, supplied = make_input(db, targets)
+        body = {'model': MODEL, 'messages': [{'role': 'system', 'content': PROMPT},
+                {'role': 'user', 'content': json.dumps(document, ensure_ascii=False)}],
+                'enable_thinking': False, 'enable_search': False, 'max_tokens': 4096,
+                'temperature': 0.1, 'response_format': output_schema([p['post_id'] for p in targets], list(supplied))}
+        raw = json.dumps(body, ensure_ascii=False).encode()
+        if len(raw)<=32000 and {p['post_id'] for p in targets} <= supplied.keys():
+            break
+        if len(targets)==1:
+            raise ValueError('Single-post analysis exceeds verified pricing tier')
+        targets=targets[:max(1,len(targets)//2)]
     key = hashlib.sha256(raw).hexdigest()
     reserve = len(raw) * 0.225 / 1_000_000 + 4096 * 0.974 / 1_000_000
     month = now()[:7]
