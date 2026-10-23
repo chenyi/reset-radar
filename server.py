@@ -13,12 +13,17 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from email.utils import format_datetime
+import collector
+import storage
+from analyzer import classify_candidates
 
 ROOT = Path(__file__).resolve().parent
+# Legacy mirror recovery code is retained; runtime collection now uses collector.py.
 UPSTREAM = 'https://www.starshoreai.com/quota-orbit/'
 SOURCE_NAME = '额度星盘 · Quota Orbit'
 ORIGIN = os.environ.get('PUBLIC_ORIGIN', 'http://127.0.0.1:8787').rstrip('/')
 CACHE_FILE = Path(os.environ.get('STATE_DIRECTORY', str(ROOT / '.local'))) / 'events.json'
+DB_FILE = CACHE_FILE.parent / 'radar.db'
 INTERVAL = max(300, int(os.environ.get('SYNC_INTERVAL', '300')))
 STATE_LABELS = {'scheduled': '重置预告', 'announced': '已公布', 'completed': '宣布完成', 'cancelled': '已取消', 'unconfirmed': '待确认'}
 SCOPE_LABELS = {'global': '全局', 'paid': '付费用户', 'plus-pro-business': 'Plus / Pro / Business', 'unknown': '适用范围未明确'}
@@ -43,7 +48,7 @@ def utcnow():
 def summarize(data, now=None):
     now = time.time() if now is None else now
     checked = timestamp(data.get('source_checked_at'))
-    stale = not (data.get('sync_ok') and data.get('source_healthy') and checked is not None and 0 <= now - checked <= 1800)
+    stale = not (data.get('sync_ok') and data.get('source_healthy') and checked is not None and 0 <= now - checked <= data.get('fresh_seconds', 1800))
     events = sorted(data.get('events', []), key=lambda e: timestamp(e.get('published_at')) or 0, reverse=True)
     latest = events[0] if events else None
     completed_roots = {e.get('root_id') or e['event_id'] for e in events if e.get('state') in ('completed', 'cancelled')}
@@ -121,25 +126,46 @@ def fetch_all():
 
 def sync_loop():
     while True:
+        db = storage.connect(DB_FILE)
         try:
-            fetch_all()
+            collector.incremental(db)
+            classify_candidates(db)
         except Exception as exc:
-            with lock:
-                cache['sync_ok'] = False
-            print(f'sync failed: {type(exc).__name__}; preserving last successful data', flush=True)
-        time.sleep(INTERVAL)
+            print(f'RSS sync failed: {type(exc).__name__}; preserving archived posts', flush=True)
+        interval = storage.get_state(db, 'source_ttl', 2400)
+        db.close()
+        time.sleep(interval)
+
+
+def backfill_loop():
+    db = storage.connect(DB_FILE)
+    try:
+        collector.backfill(db, os.environ.get('HISTORY_START', '2026-04-23'),
+                           os.environ.get('HISTORY_END', '2026-10-24'))
+    except Exception as exc:
+        print(f'Historical collection paused: {type(exc).__name__}; checkpoint retained', flush=True)
+    finally:
+        classify_candidates(db)
+        db.close()
 
 
 def snapshot():
-    with lock:
-        result = copy.deepcopy(cache)
+    db = storage.connect(DB_FILE)
+    try:
+        result = storage.snapshot(db)
+    finally:
+        db.close()
+    result['fresh_seconds'] = 5400
     result['summary'] = summarize(result)
-    result['source'] = {'name': SOURCE_NAME, 'url': UPSTREAM, 'docs': UPSTREAM + 'api.html'}
-    result['refresh_seconds'] = INTERVAL
+    result['source'] = {'name': 'Tibo @thsottiaux · 公开 RSS 镜像', 'url': 'https://x.com/thsottiaux',
+                        'feed': collector.SOURCE + '/thsottiaux/with_replies/rss'}
+    result['refresh_seconds'] = 2400
     return result
 
 
 def event_title(event):
+    if event.get('title'):
+        return event['title']
     kind = '重置卡' if event.get('type') == 'credit' else '额度重置'
     return kind + ' · ' + STATE_LABELS.get(event.get('state'), '待确认')
 
@@ -159,7 +185,8 @@ def rss(data):
         published = timestamp(event.get('published_at'))
         if published:
             ET.SubElement(item, 'pubDate').text = format_datetime(datetime.fromtimestamp(published, timezone.utc))
-        ET.SubElement(item, 'description').text = '来源：' + SOURCE_NAME + '。' + SCOPE_LABELS.get(event.get('scope'), '适用范围未明确') + '。公告不代表个人额度到账。原帖：' + ' '.join(event.get('source_urls', []))
+        ET.SubElement(item, 'description').text = (event.get('summary', '') + ' 来源：Tibo 公开原帖，经 RSS 镜像采集。' +
+            SCOPE_LABELS.get(event.get('scope'), '适用范围未明确') + '。公告不代表个人额度到账。原帖：' + ' '.join(event.get('source_urls', [])))
     return ET.tostring(root, encoding='utf-8', xml_declaration=True)
 
 
@@ -214,10 +241,25 @@ class Handler(BaseHTTPRequestHandler):
         path = urllib.parse.urlsplit(self.path).path
         if path == '/health':
             data = snapshot()
-            body = json.dumps({'ok': True, 'ready': bool(data['events']), 'source_fresh': not data['summary']['stale'], 'events': len(data['events'])}).encode()
+            body = json.dumps({'ok': True, 'ready': bool(data['collection']['posts']),
+                'source_fresh': not data['summary']['stale'], 'events': len(data['events']),
+                'posts': data['collection']['posts'], 'ai_enabled': data['ai']['enabled']}).encode()
             return self.send(200, body, 'application/json; charset=utf-8')
         if path == '/api/events':
             return self.send(200, json.dumps(snapshot(), ensure_ascii=False).encode(), 'application/json; charset=utf-8')
+        if path == '/api/posts':
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            try:
+                offset = max(0, int(query.get('offset', ['0'])[0]))
+                limit = min(100, max(1, int(query.get('limit', ['20'])[0])))
+            except ValueError:
+                return self.send(400, b'Invalid pagination', 'text/plain')
+            db = storage.connect(DB_FILE)
+            try:
+                data = storage.list_posts(db, query.get('q', [''])[0], offset, limit)
+            finally:
+                db.close()
+            return self.send(200, json.dumps(data, ensure_ascii=False).encode(), 'application/json; charset=utf-8')
         if path == '/rss.xml':
             return self.send(200, rss(snapshot()), 'application/rss+xml; charset=utf-8')
         if path == '/reminder.ics':
@@ -246,6 +288,7 @@ if __name__ == '__main__':
         except (ValueError, OSError):
             pass
     threading.Thread(target=sync_loop, daemon=True).start()
+    threading.Thread(target=backfill_loop, daemon=True).start()
     server = ThreadingHTTPServer((os.environ.get('HOST', '127.0.0.1'), int(os.environ.get('PORT', '8787'))), Handler)
     server.timeout = 15
     print('Reset Radar is listening', flush=True)
