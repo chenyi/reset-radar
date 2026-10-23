@@ -296,8 +296,9 @@ def apply_result(db, entry, posts, analysis_id):
 
 
 def revalidate_current(db):
-    rows=db.execute("SELECT a.* FROM post_analyses a JOIN posts p USING(post_id) WHERE a.engine='qwen' AND a.prompt_version=? AND a.input_hash=p.content_hash",(VERSION,)).fetchall()
-    for row in rows:
+    ids=[r[0] for r in db.execute("SELECT a.analysis_id FROM post_analyses a JOIN posts p USING(post_id) WHERE a.engine='qwen' AND a.prompt_version=? AND a.input_hash=p.content_hash",(VERSION,))]
+    for analysis_id in ids:
+        row=db.execute('SELECT * FROM post_analyses WHERE analysis_id=?',(analysis_id,)).fetchone()
         entry=json.loads(row['result_json'])
         if entry.get('validation_version')==VALIDATION_VERSION:
             continue
