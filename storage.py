@@ -111,7 +111,7 @@ def save_posts(db, posts):
     return inserted
 
 
-def snapshot(db):
+def snapshot(db, version=None):
     events = []
     for row in db.execute("SELECT * FROM reset_events WHERE confidence IN ('ai-direct','ai-context') ORDER BY published_at DESC"):
         event = dict(row)
@@ -129,9 +129,10 @@ def snapshot(db):
     for row in db.execute('''SELECT p.*,a.analysis_id,a.category,a.result_json,a.created_at AS analyzed_at
       FROM posts p JOIN post_analyses a USING(post_id)
       WHERE a.engine='qwen' AND a.relevant=1 AND a.input_hash=p.content_hash
+      AND (? IS NULL OR a.prompt_version=?)
       AND a.analysis_id=(SELECT max(b.analysis_id) FROM post_analyses b
         WHERE b.post_id=p.post_id AND b.engine='qwen' AND b.input_hash=p.content_hash)
-      ORDER BY p.created_at DESC'''):
+      ORDER BY p.created_at DESC''', (version,version)):
         message = {k: row[k] for k in ('post_id','text','url','created_at','is_reply','reply_to_id',
                                      'quoted_text','community_note','category','analyzed_at')}
         result = json.loads(row['result_json'])
@@ -140,9 +141,12 @@ def snapshot(db):
         message.update(event_id=link[0] if link else None, reason=result.get('reason', ''),
                        state=result.get('state'), confidence=result.get('confidence'))
         messages.append(message)
+    if version:
+        eligible = {m['event_id'] for m in messages}
+        events = [e for e in events if e['event_id'] in eligible]
     posts = db.execute('SELECT count(*),min(created_at),max(created_at) FROM posts').fetchone()
     jobs = [dict(x) for x in db.execute("SELECT * FROM collection_jobs WHERE kind='backfill' ORDER BY requested_start")]
-    analyzed = db.execute("SELECT count(DISTINCT p.post_id) FROM posts p JOIN post_analyses a USING(post_id) WHERE a.engine='qwen' AND a.input_hash=p.content_hash").fetchone()[0]
+    analyzed = db.execute("SELECT count(DISTINCT p.post_id) FROM posts p JOIN post_analyses a USING(post_id) WHERE a.engine='qwen' AND a.input_hash=p.content_hash AND (? IS NULL OR a.prompt_version=?)",(version,version)).fetchone()[0]
     return {'events': events, 'messages': messages, 'analysis': {'reviewed': analyzed, 'total': posts[0]},
             'collection': {'posts': posts[0], 'oldest_post': posts[1],
             'newest_post': posts[2], 'windows': jobs,

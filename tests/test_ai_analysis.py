@@ -45,6 +45,20 @@ class EvidenceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             ai_analysis.validate(entry, self.posts, {'1'})
 
+    def test_source_completion_overrides_model_forecast(self):
+        self.posts['1']['text']="Day 15/ Nevermind, we're still cooking... and reset. Enjoy."
+        e={'post_id':'1','relevant':True,'category':'forecast','anchor_id':'1','type':'reset','state':'announced',
+           'evidence':[{'post_id':'1','quote':self.posts['1']['text'],'role':'update'}]}
+        result=ai_analysis.validate(e,self.posts,{'1'})
+        self.assertEqual((result['state'],result['category']),('completed','completed'))
+
+    def test_street_card_joke_and_cash_compensation_are_excluded(self):
+        for text in ["People have escaped the TL and are asking me for resets on the street now. I’ll make little cards to hand out", "If this affected you, we'll add credits to your account."]:
+            self.posts['1']['text']=text
+            e={'post_id':'1','relevant':True,'category':'credit','anchor_id':'1','type':'credit','state':'unconfirmed',
+               'evidence':[{'post_id':'1','quote':text,'role':'update'}]}
+            self.assertFalse(ai_analysis.validate(e,self.posts,{'1'})['relevant'])
+
     def test_expired_or_non_postpaid_coupon_is_excluded(self):
         c = {'Status': 'Available', 'EffectiveTime': '2026-10-01T00:00:00Z',
              'ExpiryTime': '2026-12-01T00:00:00Z', 'Balance': '300',

@@ -16,7 +16,7 @@ from email.utils import format_datetime
 import collector
 import storage
 from analyzer import classify_candidates
-from ai_analysis import analyze_batch
+from ai_analysis import analyze_batch, VERSION as AI_VERSION
 from billing_guard import FundingUnavailable
 
 ROOT = Path(__file__).resolve().parent
@@ -176,7 +176,7 @@ def analysis_loop():
 def snapshot():
     db = storage.connect(DB_FILE)
     try:
-        result = storage.snapshot(db)
+        result = storage.snapshot(db, AI_VERSION)
     finally:
         db.close()
     result['fresh_seconds'] = 5400
