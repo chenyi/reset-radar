@@ -16,7 +16,7 @@ from email.utils import format_datetime
 import collector
 import storage
 from analyzer import classify_candidates
-from ai_analysis import analyze_batch, VERSION as AI_VERSION
+from ai_analysis import analyze_batch, revalidate_current, VERSION as AI_VERSION
 from billing_guard import FundingUnavailable
 
 ROOT = Path(__file__).resolve().parent
@@ -170,7 +170,7 @@ def analysis_loop():
             print(f'AI analysis paused: {type(exc).__name__}: {str(exc)[:250]}', flush=True)
         finally:
             db.close()
-        time.sleep(3 if worked else 60)
+        time.sleep(0.2 if worked else 60)
 
 
 def snapshot():
@@ -311,6 +311,7 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == '__main__':
     initial_db = storage.connect(DB_FILE)
     collector.separate_archived_notes(initial_db)
+    revalidate_current(initial_db)
     initial_db.close()
     if CACHE_FILE.exists():
         try:
