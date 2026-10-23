@@ -1,6 +1,7 @@
 """Durable notification planning; channel credentials stay outside the database."""
 import hashlib
 import json
+import notification_templates
 from datetime import datetime, timedelta, timezone
 
 SCHEMA = '''
@@ -63,11 +64,17 @@ def queue(db, channel, event, revision, kind, due):
         original = evidence[-1]
         lines.extend([original.get('text', ''), original.get('url', '')])
     lines.append('公开公告不保证个人额度到账，请在自己的账号核对。')
-    payload = {'title':title, 'text':'\n\n'.join(lines), 'kind':kind}
+    payload = {'title':title, 'text':'\n\n'.join(lines), 'kind':kind, 'event_id':event['event_id'],
+               'target_at':deadline, 'time_label':label, 'post':evidence[-1] if evidence else {}}
+    if kind in ('completed','cancelled'):
+        payload['target_at'] = event.get('completed_announced_at') or (evidence[-1].get('created_at') if evidence else None) or event.get('published_at')
+        payload['time_label'] = '完成公告时间' if kind=='completed' else '取消公告时间'
+    payload['text'] = notification_templates.render(payload)
     job_id = hashlib.sha256(f'{channel}:{event["event_id"]}:{revision}:{kind}'.encode()).hexdigest()
     db.execute('''INSERT INTO notification_jobs
       (job_id,channel_id,event_id,revision,kind,scheduled_at,payload,status)
-      VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(job_id) DO NOTHING''',
+      VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(job_id) DO UPDATE SET payload=excluded.payload WHERE notification_jobs.status='pending'
+      ''',
       (job_id, channel, event['event_id'], revision, kind, utc(due), json.dumps(payload,ensure_ascii=False), 'pending'))
 
 

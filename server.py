@@ -16,6 +16,7 @@ from email.utils import format_datetime
 import collector
 import storage
 import notifications
+import translations
 from analyzer import classify_candidates
 from ai_analysis import analyze_batch, revalidate_current, recover_requests, VERSION as AI_VERSION
 from billing_guard import FundingUnavailable
@@ -176,6 +177,19 @@ def analysis_loop():
         time.sleep(0.2 if worked else 60)
 
 
+def translation_loop():
+    while True:
+        db = storage.connect(DB_FILE)
+        worked = False
+        try:
+            worked = translations.translate_batch(db)
+        except Exception as exc:
+            print(f'Chinese translation paused: {type(exc).__name__}', flush=True)
+        finally:
+            db.close()
+        time.sleep(0.2 if worked else 60)
+
+
 def snapshot():
     db = storage.connect(DB_FILE)
     try:
@@ -212,13 +226,14 @@ def rss(data):
         message = 'post_id' in event
         identity = event['post_id'] if message else event['event_id']
         labels = {'forecast':'重置预告','progress':'重置进展','completed':'重置完成','credit':'重置卡','correction':'取消／更正'}
-        ET.SubElement(item, 'title').text = labels.get(event.get('category'), '') + ' · ' + event['text'][:120] if message else event_title(event)
+        reading = event.get('text_zh') or '中文译文正在整理，请查看作者原文。'
+        ET.SubElement(item, 'title').text = labels.get(event.get('category'), '') + ' · ' + reading[:120] if message else event_title(event)
         ET.SubElement(item, 'link').text = ORIGIN + ('/#post/' if message else '/#event/') + identity
         ET.SubElement(item, 'guid', isPermaLink='false').text = 'reset-radar:' + identity
         published = timestamp(event.get('created_at') if message else event.get('published_at'))
         if published:
             ET.SubElement(item, 'pubDate').text = format_datetime(datetime.fromtimestamp(published, timezone.utc))
-        ET.SubElement(item, 'description').text = (event.get('text', event.get('summary', '')) + ' 来源：Tibo 公开原帖，经 RSS 镜像采集。' +
+        ET.SubElement(item, 'description').text = ((reading if message else event.get('summary', '')) + ' 来源：Tibo 公开原帖，经 RSS 镜像采集。' +
             SCOPE_LABELS.get(event.get('scope'), '适用范围未明确') + '。公告不代表个人额度到账。原帖：' + (event['url'] if message else ' '.join(event.get('source_urls', []))))
     return ET.tostring(root, encoding='utf-8', xml_declaration=True)
 
@@ -276,7 +291,7 @@ class Handler(BaseHTTPRequestHandler):
             data = snapshot()
             body = json.dumps({'ok': True, 'ready': bool(data['collection']['posts']),
                 'source_fresh': not data['summary']['stale'], 'events': len(data['events']),
-                'posts': data['collection']['posts'], 'ai_enabled': data['ai']['enabled'],
+                'posts': data['collection']['posts'], 'translations':data['translation'], 'ai_enabled': data['ai']['enabled'],
                 'database': 'postgresql' if os.environ.get('DATABASE_URL') else 'sqlite'}).encode()
             return self.send(200, body, 'application/json; charset=utf-8')
         if path == '/api/events':
@@ -302,6 +317,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, body, 'text/calendar; charset=utf-8', 'attachment; filename="codex-reset.ics"')
             return self.send(409, '当前没有可订阅的有效预告，请等待新公告。'.encode(), 'text/plain; charset=utf-8')
         files = {'/': ('index.html', 'text/html'), '/app.js': ('app.js', 'text/javascript'), '/style.css': ('style.css', 'text/css'), '/favicon.svg': ('favicon.svg', 'image/svg+xml')}
+        files['/style-options'] = ('style-options.html','text/html')
+        files['/style-options.css'] = ('style-options.css','text/css')
+        for name in ('robot-mint.png','robot-orbit.png','robot-clock.png'):
+            files['/assets/'+name] = ('assets/'+name,'image/png')
         if path in files:
             name, mime = files[path]
             return self.send(200, (ROOT / 'public' / name).read_bytes(), mime + '; charset=utf-8')
@@ -331,6 +350,7 @@ if __name__ == '__main__':
     threading.Thread(target=sync_loop, daemon=True).start()
     threading.Thread(target=backfill_loop, daemon=True).start()
     threading.Thread(target=analysis_loop, daemon=True).start()
+    threading.Thread(target=translation_loop, daemon=True).start()
     server = ThreadingHTTPServer((os.environ.get('HOST', '127.0.0.1'), int(os.environ.get('PORT', '8787'))), Handler)
     server.timeout = 15
     print('Reset Radar is listening', flush=True)

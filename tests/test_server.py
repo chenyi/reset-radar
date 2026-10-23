@@ -35,6 +35,14 @@ class AnnouncementSemantics(unittest.TestCase):
     def test_rss_keeps_stable_identity_and_xml_escapes(self):
         e=event('a&b'); d=data([e]); d['summary']=summarize(d,NOW)
         self.assertEqual(ET.fromstring(rss(d)).find('channel/item/guid').text,'reset-radar:a&b')
+    def test_rss_uses_chinese_reading_copy_and_keeps_original_link(self):
+        d=data([]);d['summary']=summarize(d,NOW)
+        d['messages']=[{'post_id':'123','category':'forecast','text':'A reset is coming','text_zh':'即将有一次额度重置','url':'https://x.com/thsottiaux/status/123','created_at':'2026-10-23T08:00:00Z'}]
+        item=ET.fromstring(rss(d)).find('channel/item')
+        self.assertIn('即将有一次额度重置',item.findtext('title'))
+        self.assertNotIn('A reset is coming',item.findtext('description'))
+        self.assertIn('https://x.com/thsottiaux/status/123',item.findtext('description'))
+        self.assertEqual(item.findtext('guid'),'reset-radar:123')
     def test_unsafe_source_urls_are_removed(self):
         self.assertEqual(safe_sources(['javascript:alert(1)','https://evil.example/x','https://x.com/a']),['https://x.com/a'])
 
