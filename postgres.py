@@ -92,6 +92,7 @@ def connect(dsn):
         if dsn not in _initialized:
             schema = SCHEMA
             schema = schema.replace('analysis_id INTEGER PRIMARY KEY', 'analysis_id BIGSERIAL PRIMARY KEY')
+            schema = re.sub(r'\bREAL\b', 'DOUBLE PRECISION', schema)
             with db:
                 for statement in schema.split(';'):
                     if statement.strip():

@@ -11,9 +11,9 @@
 - 关键词仅供内部候选；不会直接进入页面或 RSS。AI 排除请求、许愿、玩笑、一般讨论和普通额度调整。Qwen 分析保存逐字证据与版本，时间必须有原文依据；PST 与 PT 分别换算。
 - 旧版第三方整理结果保留于 `events.json`；不混作 Tibo 原帖证据，不再作为当前页面数据源。
 
-## SQLite
+## 存储与本地开发
 
-状态目录中的 `radar.db` 使用 WAL 与外键。表包括 `posts`、`post_analyses`、`reset_events`、`event_posts`、`collection_jobs`、`sync_state`、`ai_requests`。
+未配置 PostgreSQL 的本地开发环境中，状态目录中的 `radar.db` 使用 WAL 与外键。表包括 `posts`、`post_analyses`、`reset_events`、`event_posts`、`collection_jobs`、`sync_state`、`ai_requests`。
 
 原帖 ID 使用 TEXT；时间使用 UTC，页面显示北京时间。分析保存输入快照与版本。历史消息保留原始发布时间；RSS 是否提醒由阅读器决定。
 
@@ -62,3 +62,25 @@ python3 server.py
 AI 运行依赖安装在 `/opt/reset-radar-tools/python` 虚拟环境，使用 `requirements.txt`。模型响应在 `ai_requests.response_json` 留存，已收到的响应验证重放不会重复调用模型。
 
 引用帖通过 RSS 的引用链接保存 `quote_id`。只有完成用语的引用链能指向 Tibo 的重置公告时，才作为上下文完成回应；孤立的 Done 不当作完成。中断请求仍保留费用预留，每批最多自动重试一次；接口错误详情仅保存于服务器排障状态。
+
+## PostgreSQL 与通知发送
+
+线上使用同机 PostgreSQL 16，仅监听回环地址。应用从 root 0600 的 `/etc/reset-radar/database.env` 读取 `DATABASE_URL`。未设置时仍可使用 SQLite 做本地开发。原帖 ID 和 UTC 时间保持原有语义；费用列使用 DOUBLE PRECISION，迁移逐表逐值验证，避免 PostgreSQL REAL 降低精度。
+
+`postgres.py` 保持已有查询与行访问契约；AI 月预算预留使用事务级 advisory lock，防止并发超额预留。数据库口令不进入 Git 或命令输出。
+
+通知由 `notifications.py` 生成持久任务，`notification_worker.py` 独立发送，不读取 RSS、不调用模型。`notification_channels` 保存渠道开关，`notification_events` 保存事件版本，`notification_jobs` 保存计划时间、状态、尝试次数和发送结果。Webhook 仅保存在 `/etc/reset-radar/notifications.env`，钉钉机器人限制服务器 IP，不开启 Outgoing。
+
+首个渠道为钉钉；未来渠道只需实现接收标准消息的发送函数并注册 kind。新预告、明确时间前 15 分钟、确认完成及取消更正按事件去重。历史采用基线，不补发；普通进展不发送。截止时间明确标记为截止；来源过期、时间已过或预告被替代时取消提醒。超时或发送中断标记 unknown，须先核查群内结果再人工处理，不自动重发。
+
+```sh
+node tests/test_archive_ui.js
+# 可选：在空的专用测试数据库验证 PG 事务、预算并发与精度
+TEST_POSTGRES_URL=postgresql://... python3 -m unittest discover -s tests -v
+# 导入前由运维设置 DATABASE_URL；目标必须为空
+python3 scripts/migrate_postgres.py /path/to/sqlite-backup.db
+# 服务器 root 下备份
+scripts/backup-postgres.sh
+```
+
+运行凭据、备份和验收截图存放在仓外。迁移与回滚见 [运维说明](docs/operations.md)，需求审批和群聊整理见 [项目流程](docs/project-workflow.md)。

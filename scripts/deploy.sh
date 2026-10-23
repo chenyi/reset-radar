@@ -4,6 +4,7 @@ cd "$(dirname "$0")/.."
 python3 -m unittest discover -s tests -v
 python3 -m py_compile server.py
 node --check public/app.js
+node tests/test_archive_ui.js
 if [ -n "$(git status --porcelain)" ]; then echo 'Commit the reviewed source before deploying.' >&2; exit 1; fi
 release="/opt/reset-radar/releases/$(date -u +%Y%m%dT%H%M%SZ)-$(git rev-parse --short HEAD)"
 mkdir -p "$release" /opt/reset-radar/backups
@@ -15,12 +16,19 @@ fi
 if [ -f /etc/systemd/system/reset-radar.service ]; then cp -p /etc/systemd/system/reset-radar.service "/opt/reset-radar/backups/reset-radar.service.$(date -u +%Y%m%dT%H%M%SZ)"; fi
 ln -sfn "$release" /opt/reset-radar/current
 install -m 644 deploy/reset-radar.service /etc/systemd/system/reset-radar.service
+if [ -f /etc/reset-radar/notifications.env ]; then
+  install -m 644 deploy/reset-radar-notifications.service /etc/systemd/system/reset-radar-notifications.service
+fi
 systemctl daemon-reload
 systemctl enable --now reset-radar.service
 systemctl restart reset-radar.service
 for attempt in {1..30}; do
   if curl -fsS http://127.0.0.1/health 2>/dev/null | python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(not d["ready"])' 2>/dev/null; then
     systemctl is-active reset-radar.service
+    if [ -f /etc/reset-radar/notifications.env ]; then
+      systemctl enable --now reset-radar-notifications.service
+      systemctl restart reset-radar-notifications.service
+    fi
     echo "Deployed $(git rev-parse --short HEAD)"
     exit 0
   fi

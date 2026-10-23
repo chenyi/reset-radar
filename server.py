@@ -276,7 +276,8 @@ class Handler(BaseHTTPRequestHandler):
             data = snapshot()
             body = json.dumps({'ok': True, 'ready': bool(data['collection']['posts']),
                 'source_fresh': not data['summary']['stale'], 'events': len(data['events']),
-                'posts': data['collection']['posts'], 'ai_enabled': data['ai']['enabled']}).encode()
+                'posts': data['collection']['posts'], 'ai_enabled': data['ai']['enabled'],
+                'database': 'postgresql' if os.environ.get('DATABASE_URL') else 'sqlite'}).encode()
             return self.send(200, body, 'application/json; charset=utf-8')
         if path == '/api/events':
             return self.send(200, json.dumps(snapshot(), ensure_ascii=False).encode(), 'application/json; charset=utf-8')

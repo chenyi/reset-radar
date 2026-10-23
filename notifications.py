@@ -89,11 +89,11 @@ def plan(db, snapshot, at=None):
                 # A new channel adopts history as a baseline; only future reminders may be queued.
                 fresh_event = stamp(event.get('activity_at') or event['published_at']) >= stamp(channel['created_at'])
                 if changed:
-                    db.execute("UPDATE notification_jobs SET status='cancelled' WHERE channel_id=? AND event_id=? AND kind='reminder' AND status='pending'",
+                    db.execute("UPDATE notification_jobs SET status='cancelled' WHERE channel_id=? AND event_id=? AND kind IN ('forecast','reminder','correction') AND status='pending'",
                                (channel['channel_id'], event['event_id']))
                 if event.get('type') == 'reset':
                     kind = None
-                    if state in ('completed','cancelled') and fresh_event and (changed or not old):
+                    if state in ('completed','cancelled') and fresh_event and (not old or previous.get('state') != state):
                         kind = state
                     elif state in ('announced','scheduled'):
                         if not old and fresh_event:
