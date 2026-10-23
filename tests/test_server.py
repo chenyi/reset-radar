@@ -24,6 +24,12 @@ class AnnouncementSemantics(unittest.TestCase):
         self.assertIsNone(summarize(data([forecast,complete]),NOW)['upcoming'])
     def test_future_healthy_forecast_is_active(self):
         s=summarize(data([event()]),NOW); self.assertEqual(s['upcoming']['event_id'],'a')
+    def test_later_completion_reply_supersedes_an_earlier_forecast(self):
+        completion={**event('thread'),'state':'completed','published_at':'2026-10-22T08:00:00Z',
+                    'activity_at':'2026-10-23T08:01:00Z','completed_announced_at':'2026-10-23T08:01:00Z'}
+        s=summarize(data([event('forecast'),completion]),NOW+100)
+        self.assertIsNone(s['upcoming'])
+        self.assertEqual(s['latest_completed']['event_id'],'thread')
     def test_calendar_refuses_stale_forecast(self):
         d=data([event()]); d['summary']=summarize(d,NOW+1801); self.assertIsNone(calendar(d))
     def test_rss_keeps_stable_identity_and_xml_escapes(self):

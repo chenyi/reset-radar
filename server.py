@@ -51,7 +51,7 @@ def summarize(data, now=None):
     now = time.time() if now is None else now
     checked = timestamp(data.get('source_checked_at'))
     stale = not (data.get('sync_ok') and data.get('source_healthy') and checked is not None and 0 <= now - checked <= data.get('fresh_seconds', 1800))
-    events = sorted(data.get('events', []), key=lambda e: timestamp(e.get('published_at')) or 0, reverse=True)
+    events = sorted(data.get('events', []), key=lambda e: timestamp(e.get('activity_at') or e.get('published_at')) or 0, reverse=True)
     analyzed = [e for e in events if e.get('confidence') != 'candidate' and e.get('state') != 'unconfirmed']
     latest = analyzed[0] if analyzed else events[0] if events else None
     completed_roots = {e.get('root_id') or e['event_id'] for e in events if e.get('state') in ('completed', 'cancelled')}
@@ -62,7 +62,8 @@ def summarize(data, now=None):
         target = timestamp(deadline)
         if target and target > now and (latest.get('root_id') or latest['event_id']) not in completed_roots and not stale:
             upcoming = {**latest, 'target_at': deadline}
-    latest_completed = next((e for e in events if e.get('state') == 'completed' and e.get('type') == 'reset'), None)
+    completions = [e for e in events if e.get('state')=='completed' and e.get('type')=='reset']
+    latest_completed = max(completions,key=lambda e:timestamp(e.get('completed_announced_at') or e.get('published_at')) or 0,default=None)
     return {'stale': stale, 'latest': latest, 'upcoming': upcoming, 'latest_completed': latest_completed,
             'count': len(events), 'completed_count': sum(e.get('state') == 'completed' and e.get('type') == 'reset' for e in events)}
 

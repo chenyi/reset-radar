@@ -123,7 +123,8 @@ def snapshot(db, version=None):
         ''', (event['event_id'],))]
         evidence = list({x['post_id']: x for x in evidence}.values())
         event.update(root_id=event['event_id'], source_urls=[x['url'] for x in evidence],
-                     evidence=evidence, scope_verified=False)
+                     evidence=evidence, scope_verified=False,
+                     activity_at=max((x['created_at'] for x in evidence),default=event['published_at']))
         events.append(event)
     messages = []
     for row in db.execute('''SELECT p.*,a.analysis_id,a.category,a.result_json,a.created_at AS analyzed_at

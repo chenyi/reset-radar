@@ -43,7 +43,7 @@ function renderHero() {
   $('connection').className=`connection ${fresh?'healthy':'stale'}`;
   $('connection').innerHTML=`<i></i>${fresh?'信号同步正常':'数据待更新'}`;
   $('record-count').textContent=(model.messages||[]).length;
-  $('last-reset').textContent=model.summary.latest_completed ? fmt(model.summary.latest_completed.published_at) : '暂无记录';
+  $('last-reset').textContent=model.summary.latest_completed ? fmt(model.summary.latest_completed.completed_announced_at||model.summary.latest_completed.published_at) : '暂无记录';
   $('source-state').textContent=fresh?'正常同步':'等待更新';
   $('source-checked').textContent=model.source_checked_at ? `${fmt(model.source_checked_at)} 采集 · 北京时间` : '尚未取得有效数据';
   $('sync-time').textContent=model.last_sync?`${fmt(model.last_sync)} 同步`:'等待首次同步';
@@ -105,7 +105,7 @@ function showDetail(id, selectedPost=null) {
   const fields=[['消息类型',typeLabel(event)],['公开状态',statusLabel(event)],['公告发布时间',`${fmt(event.published_at)} · 北京时间`],['适用范围',scopeLabels[event.scope]||scopeLabels.unknown],['预计时间',timeValue(event)?`${fmt(timeValue(event))} · 北京时间`:'原帖未明确'],['范围核验',event.scope_verified?'来源标记为已核验':'来源未核验范围']];
   const evidence=(event.evidence||[]).map(p=>`<section class="post-evidence"><div><a href="${escape(safeLink(p.url)||'#')}" target="_blank" rel="noopener noreferrer">@thsottiaux ${p.is_reply?'· 回复':'· 原帖'} ↗</a><time>${escape(fmt(p.created_at))}</time></div><blockquote class="post-text">${escape(p.text)}</blockquote>${extraContent(p)}</section>`).join('');
   $('detail-content').innerHTML=`<span class="badge">${escape(statusLabel(event))}</span><h2 id="detail-title">${escape(selectedPost?categoryLabels[selectedPost.category]:typeLabel(event))} · 原帖与关联消息</h2>${selectedPost?`<p class="detail-note">分类依据：${escape(selectedPost.reason)}</p>`:''}<dl class="detail-grid">${fields.map(([k,v])=>`<div><dt>${k}</dt><dd>${escape(v)}</dd></div>`).join('')}</dl>${evidence?`<h3>原帖证据</h3>${evidence}`:''}<div class="detail-sources">${sources.map((url,i)=>`<a href="${escape(url)}" target="_blank" rel="noopener noreferrer">${i===0?'查看公开原帖':'查看补充原帖'} ↗</a>`).join('')}</div><p class="detail-note">经公开 RSS 镜像采集。分类与关联由 AI 辅助判断，请核对作者原文。公开预告不保证个人到账；预计时间已过也不代表重置已完成。${event.original_timezone==='PST'?' 原文 PST 按 UTC−8 换算；日历日期需结合作者当地发布时间。':''}</p><button class="button" id="copy-event">复制消息链接 ↗</button>`;
-  $('copy-event').onclick=()=>copyText(`${location.origin}/#event/${encodeURIComponent(id)}`);
+  $('copy-event').onclick=()=>copyText(selectedPost?`${location.origin}/#post/${encodeURIComponent(selectedPost.post_id)}`:`${location.origin}/#event/${encodeURIComponent(id)}`);
   if(!$('detail-dialog').open)$('detail-dialog').showModal();
 }
 function handleHash(){
