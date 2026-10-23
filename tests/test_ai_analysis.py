@@ -157,6 +157,16 @@ class WorkerTests(unittest.TestCase):
             self.assertTrue(ai_analysis.analyze_batch(self.db))
             self.assertEqual(request.call_count,1)
 
+    def test_timeout_reservation_is_retained_and_retry_is_bounded(self):
+        with patch.object(billing_guard,'verify'),patch('ai_analysis.urllib.request.urlopen',side_effect=TimeoutError) as request:
+            for attempt in range(2):
+                with self.assertRaises(TimeoutError):ai_analysis.analyze_batch(self.db)
+            with self.assertRaises(billing_guard.FundingUnavailable):ai_analysis.analyze_batch(self.db)
+            self.assertEqual(request.call_count,2)
+        rows=self.db.execute('SELECT status,reserved_cny FROM ai_requests').fetchall()
+        self.assertEqual(len(rows),2)
+        self.assertTrue(all(r['status']=='interrupted' and r['reserved_cny']>0 for r in rows))
+
 
 if __name__ == '__main__':
     unittest.main()

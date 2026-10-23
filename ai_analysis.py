@@ -4,6 +4,7 @@ import os
 import re
 import time
 import urllib.request
+import urllib.error
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -257,6 +258,12 @@ def revalidate_current(db):
             apply_result(db,entry,posts,row['analysis_id'])
 
 
+def recover_requests(db):
+    # Called only at service startup, after systemd has stopped the previous worker.
+    with db:
+        db.execute("UPDATE ai_requests SET status='interrupted' WHERE status='reserved'")
+
+
 def analyze_batch(db):
     if os.environ.get('AI_ENABLED') != '1':
         return False
@@ -281,10 +288,14 @@ def analyze_batch(db):
         if len(targets)==1:
             raise ValueError('Single-post analysis exceeds verified pricing tier')
         targets=targets[:max(1,len(targets)//2)]
-    key = hashlib.sha256(raw).hexdigest()
+    base_key = hashlib.sha256(raw).hexdigest()
+    key = base_key
     reserve = len(raw) * 0.225 / 1_000_000 + 4096 * 0.974 / 1_000_000
     month = now()[:7]
     existing = db.execute('SELECT * FROM ai_requests WHERE request_key=?', (key,)).fetchone()
+    if existing and existing['status']=='interrupted':
+        key=base_key+':retry1'
+        existing=db.execute('SELECT * FROM ai_requests WHERE request_key=?',(key,)).fetchone()
     if existing and (existing['status'] != 'received' or not existing['response_json']):
         raise billing_guard.FundingUnavailable('有待核验的模型请求，AI 已暂停重试')
     with db:
@@ -302,8 +313,13 @@ def analyze_batch(db):
     if existing:
         result = json.loads(existing['response_json'])
     else:
-        with urllib.request.urlopen(request, timeout=60) as response:
-            result = json.loads(response.read(1_000_001))
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                result = json.loads(response.read(1_000_001))
+        except (urllib.error.URLError, TimeoutError):
+            with db:
+                db.execute("UPDATE ai_requests SET status='interrupted' WHERE request_key=?",(key,))
+            raise
     usage = result.get('usage', {})
     input_tokens, output_tokens = usage['prompt_tokens'], usage['completion_tokens']
     actual = input_tokens * 0.225 / 1_000_000 + output_tokens * 0.974 / 1_000_000

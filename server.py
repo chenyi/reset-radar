@@ -16,7 +16,7 @@ from email.utils import format_datetime
 import collector
 import storage
 from analyzer import classify_candidates
-from ai_analysis import analyze_batch, revalidate_current, VERSION as AI_VERSION
+from ai_analysis import analyze_batch, revalidate_current, recover_requests, VERSION as AI_VERSION
 from billing_guard import FundingUnavailable
 
 ROOT = Path(__file__).resolve().parent
@@ -313,6 +313,7 @@ if __name__ == '__main__':
     initial_db = storage.connect(DB_FILE)
     collector.separate_archived_notes(initial_db)
     revalidate_current(initial_db)
+    recover_requests(initial_db)
     initial_db.close()
     if CACHE_FILE.exists():
         try:
