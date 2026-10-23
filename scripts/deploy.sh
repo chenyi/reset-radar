@@ -19,7 +19,7 @@ systemctl daemon-reload
 systemctl enable --now reset-radar.service
 systemctl restart reset-radar.service
 for attempt in {1..30}; do
-  if curl -fsS http://127.0.0.1/health | python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(not d["ready"])'; then
+  if curl -fsS http://127.0.0.1/health 2>/dev/null | python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(not d["ready"])' 2>/dev/null; then
     systemctl is-active reset-radar.service
     echo "Deployed $(git rev-parse --short HEAD)"
     exit 0

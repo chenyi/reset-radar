@@ -10,6 +10,7 @@ const escape = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<'
 const timeValue = (e) => e.window_end || e.expected_at || e.window_start;
 const safeLink = (v) => { try {const u = new URL(v); return u.protocol === 'https:' && ['x.com','twitter.com','www.starshoreai.com'].includes(u.hostname) ? u.href : null;} catch {return null;} };
 function title(e) {
+  if (isExpired(e)) return e.type === 'credit' ? '重置卡旧预告，等待后续公告。' : '这条预告已到期，等待后续公告。';
   if (e.type === 'credit') return e.state === 'completed' ? '新的重置卡，已宣布发放。' : '有一张重置卡，正在路上。';
   return ({scheduled:'新一轮额度重置，已有公开预告。',announced:'一条新的额度重置消息。',completed:'一次新的开始，已宣布重置。',cancelled:'这条重置预告，已被取消。',unconfirmed:'捕获到重置信号，等待确认。'})[e.state] || '一条新的公开重置动态。';
 }
@@ -107,7 +108,7 @@ async function copyText(text){
 function showSubscribe(){ $('rss-url').value=location.origin+'/rss.xml';$('subscribe-dialog').showModal(); }
 async function load(){
   if(loading)return;loading=true;$('refresh').disabled=true;
-  try{const response=await fetch('/api/events',{cache:'no-store'});if(!response.ok)throw new Error();const data=await response.json();if(!Array.isArray(data.events)||!data.summary)throw new Error();model=data;renderHero();renderFeed();if(location.hash.startsWith('#event/'))handleHash();}
+  try{const response=await fetch('/api/events',{cache:'no-store',signal:AbortSignal.timeout(15000)});if(!response.ok)throw new Error();const data=await response.json();if(!Array.isArray(data.events)||!data.summary)throw new Error();model=data;renderHero();renderFeed();if(location.hash.startsWith('#event/'))handleHash();}
   catch{if(model){model.sync_ok=false;renderHero();}else{$('error-banner').classList.remove('hidden');$('error-banner').textContent='暂时无法连接观察站，请稍后刷新。';$('hero-title').textContent='信号暂时未连接。';$('hero-description').textContent='服务恢复后将继续展示公开动态。';$('feed').innerHTML='<div class="empty-state">暂时无法读取消息，点击右上角刷新重试。</div>'; $('connection').innerHTML='<i></i>连接暂不可用';}}
   finally{loading=false;$('refresh').disabled=false;}
 }
@@ -123,7 +124,7 @@ $('search').oninput=()=>{limit=8;renderFeed();};
 document.querySelectorAll('.tab').forEach(button=>button.onclick=()=>{filter=button.dataset.filter;limit=8;document.querySelectorAll('.tab').forEach(b=>{b.classList.toggle('active',b===button);b.setAttribute('aria-pressed',String(b===button));});renderFeed();});
 $('load-more').onclick=()=>{limit+=8;renderFeed();};
 document.querySelectorAll('dialog').forEach(dialog=>{dialog.querySelector('.close-dialog').onclick=()=>dialog.close();dialog.addEventListener('click',e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();}});});
-$('detail-dialog').addEventListener('close',()=>{if(location.hash.startsWith('#event/'))history.replaceState(null,'',location.pathname+'#history');});
+$('detail-dialog').addEventListener('close',()=>{if(location.hash.startsWith('#event/')){history.replaceState(null,'',location.pathname+'#history');handleHash();}});
 window.addEventListener('hashchange',handleHash);
 window.addEventListener('focus',load);
 setInterval(()=>{renderCountdown();if(model&&!freshness()&&!$('error-banner').classList.contains('hidden'))return;if(model&&!freshness())renderHero();},1000);
