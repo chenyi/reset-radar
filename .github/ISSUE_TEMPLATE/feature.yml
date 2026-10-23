@@ -1,0 +1,17 @@
+name: 功能建议
+description: 描述要解决的问题及验收标准
+title: "[需求] "
+labels: [enhancement, 待审批]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 希望解决什么问题
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 怎样算完成
+    validations:
+      required: true

@@ -152,16 +152,17 @@ function renderCollection(){
   const done=c.windows.filter(x=>x.status==='source_exhausted').length;
   const partial=c.windows.filter(x=>x.status==='partial').length;
   $('archive-status').textContent=`已收录 ${c.posts} 条原帖及回复 · 已遍历 ${done}/${c.windows.length} 个历史时间段${partial?` · ${partial} 段待重试`:''}`;
-  $('archive-note').textContent=`目标范围：2026-04-23 至今。${c.coverage_note} 已分析 ${model.analysis?.reviewed||0}/${model.analysis?.total||c.posts} 条。${model.ai?.enabled?'正在继续分类。':model.ai?.reason||'等待分类。'}`;
+  $('archive-note').textContent=`目标范围：2026-04-23 至今。${c.coverage_note} 已分析 ${model.analysis?.reviewed||0}/${model.analysis?.total||c.posts} 条。${model.ai?.enabled?(model.analysis?.reviewed>=model.analysis?.total?'已完成当前归档分类，等待新帖。':'正在继续分类。'):model.ai?.reason||'等待分类。'}`;
 }
 async function loadPosts(append){
   if(archiveLoading)return;archiveLoading=true;
   const q=$('archive-search').value.trim();
   try{
-    const offset=append?archiveNext:0;
+    const continuing=append&&q===archiveQuery;
+    const offset=continuing?archiveNext:0;
     const r=await fetch(`/api/posts?q=${encodeURIComponent(q)}&offset=${offset||0}&limit=20`,{signal:AbortSignal.timeout(15000)});
     if(!r.ok)throw new Error();const d=await r.json();
-    archiveItems=append&&q===archiveQuery?archiveItems.concat(d.posts):d.posts;
+    archiveItems=continuing?archiveItems.concat(d.posts):d.posts;
     archiveQuery=q;archiveNext=d.next_offset;archiveLoaded=true;
     $('archive-posts').innerHTML=archiveItems.map(p=>`<article class="archive-post"><div class="event-meta"><span>@thsottiaux · ${p.is_reply?'回复':p.quote_id?'引用帖':'原帖'}</span><time>${escape(fmt(p.created_at))}</time></div><p class="post-text">${escape(p.text)}</p>${extraContent(p)}<a href="${escape(safeLink(p.url)||'#')}" target="_blank" rel="noopener noreferrer">核对 X 原帖 ↗</a></article>`).join('')||'<div class="empty-state">暂无匹配原帖；历史采集仍会继续。</div>';
     $('archive-more').classList.toggle('hidden',archiveNext===null);

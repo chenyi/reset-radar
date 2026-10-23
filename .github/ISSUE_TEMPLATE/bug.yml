@@ -1,0 +1,27 @@
+name: 页面或功能问题
+description: 反馈可以复现的问题
+title: "[Bug] "
+labels: [bug, 待审批]
+body:
+  - type: textarea
+    id: actual
+    attributes:
+      label: 遇到了什么问题
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤、设备及浏览器
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望结果
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 截图或其他证据（请勿包含凭据与个人信息）

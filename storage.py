@@ -1,4 +1,5 @@
 import json
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -8,13 +9,7 @@ def now():
     return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
 
 
-def connect(path):
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    db = sqlite3.connect(path, timeout=30)
-    db.row_factory = sqlite3.Row
-    db.execute('PRAGMA foreign_keys=ON')
-    db.execute('PRAGMA journal_mode=WAL')
-    db.executescript('''
+SCHEMA = '''
       CREATE TABLE IF NOT EXISTS posts (
         post_id TEXT PRIMARY KEY, author TEXT NOT NULL, text TEXT NOT NULL,
         created_at TEXT NOT NULL, url TEXT NOT NULL, is_reply INTEGER NOT NULL,
@@ -64,7 +59,18 @@ def connect(path):
         input_tokens INTEGER, output_tokens INTEGER, provider_request_id TEXT,
         created_at TEXT NOT NULL, response_json TEXT
       );
-    ''')
+    '''
+
+def connect(path):
+    if os.environ.get('DATABASE_URL'):
+        from postgres import connect as pg_connect
+        return pg_connect(os.environ['DATABASE_URL'])
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    db = sqlite3.connect(path, timeout=30)
+    db.row_factory = sqlite3.Row
+    db.execute('PRAGMA foreign_keys=ON')
+    db.execute('PRAGMA journal_mode=WAL')
+    db.executescript(SCHEMA)
     if db.execute('PRAGMA user_version').fetchone()[0] < 3:
         db.execute('BEGIN IMMEDIATE')
         try:

@@ -1,3 +1,4 @@
 alibabacloud-tea-openapi==0.4.6
 alibabacloud-credentials==1.0.12
 alibabacloud-openapi-util==0.2.4
+psycopg[binary]==3.2.13

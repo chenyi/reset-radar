@@ -369,6 +369,8 @@ def analyze_batch(db):
     if existing and (existing['status'] != 'received' or not existing['response_json']):
         raise billing_guard.FundingUnavailable('有待核验的模型请求，AI 已暂停重试')
     with db:
+        if hasattr(db, 'budget_lock'):
+            db.budget_lock(month)
         total = db.execute('SELECT coalesce(sum(coalesce(actual_cny,reserved_cny)),0) FROM ai_requests WHERE month=?', (month,)).fetchone()[0]
         if not existing and total + reserve > 50:
             raise billing_guard.FundingUnavailable('本月 AI 预算已用尽')
