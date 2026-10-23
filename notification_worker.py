@@ -12,6 +12,8 @@ import urllib.parse
 import urllib.request
 
 import notifications
+import notification_templates
+import translations
 import server
 import storage
 
@@ -27,7 +29,7 @@ def send_dingtalk(message):
         signature = base64.b64encode(hmac.new(secret.encode(), (millis+'\n'+secret).encode(), hashlib.sha256).digest()).decode()
         query = urllib.parse.parse_qsl(parsed.query) + [('timestamp',millis),('sign',signature)]
         webhook = urllib.parse.urlunsplit(parsed._replace(query=urllib.parse.urlencode(query)))
-    data = {'msgtype':'markdown','markdown':{'title':message['title'],'text':message['text']},'at':{'isAtAll':False}}
+    data = {'msgtype':'markdown','markdown':{'title':message['title'],'text':notification_templates.render(message,os.environ.get('NOTIFICATION_STYLE','clear'))},'at':{'isAtAll':False}}
     request = urllib.request.Request(webhook,data=json.dumps(data,ensure_ascii=False).encode(),headers={'Content-Type':'application/json'})
     try:
         with urllib.request.urlopen(request, timeout=15) as response:
@@ -52,6 +54,11 @@ def main():
             snapshot = server.snapshot()
             job = notifications.claim(db,snapshot)
             if job:
+                payload=json.loads(job['payload'])
+                if payload.get('post',{}).get('post_id'):
+                    translated=translations.translated(db)
+                    payload['post']['text_zh']=translated.get(payload['post']['post_id'])
+                    job['payload']=json.dumps(payload,ensure_ascii=False)
                 senders = {'dingtalk':send_dingtalk}
                 channel = db.execute('SELECT kind FROM notification_channels WHERE channel_id=?',(job['channel_id'],)).fetchone()
                 status = notifications.deliver(db,job,senders[channel['kind']])

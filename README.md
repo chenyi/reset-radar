@@ -90,3 +90,13 @@ scripts/backup-postgres.sh
 [在线站点](http://47.237.1.108/) · [问题与需求](https://github.com/chenyi/reset-radar/issues) · [项目看板](https://github.com/users/chenyi/projects/1) · [版本发布](https://github.com/chenyi/reset-radar/releases)
 
 [2026-10-23 独立页面测试与迁移验收记录](docs/qa/2026-10-23.md)。新需求先待审批，由所有者明确批准后开发。
+
+## 中文阅读与样式
+
+默认首页、收录消息和详情显示简体中文，逐条保留“查看作者原文”。公开重置消息及其关联证据的译文保存在 `post_translations`，按 post_id、原文散列、locale 和提示词版本区分；原文不被覆盖。译文不参与分类、重置状态或时间计算。原文归档仍保留完整原文。
+
+翻译使用同一个个人新加坡百炼模型与共享 50 元月预算，先核对代金券，再锁定预算预留，保留 usage、请求 ID 和响应；关闭 AI 时不调用翻译。页面访问只读数据库。后台只翻译公开收录消息及证据，新帖新增翻译；历史手动处理入口是 `scripts/backfill_chinese.py`。
+
+[样式备选](http://47.237.1.108/style-options) 提供三种通知排版、三种时钟和三个机器人头像。默认采用清晰中文通知、实时北京时间指针钟和薄荷绿小钟机器人。通知 worker 可用 `NOTIFICATION_STYLE=clear|brief|bilingual` 切换排版；不配置时为 clear。
+
+生成素材与提示词见 [视觉素材说明](docs/visual-assets.md)。

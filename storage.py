@@ -53,6 +53,12 @@ SCHEMA = '''
       CREATE TABLE IF NOT EXISTS sync_state (
         key TEXT PRIMARY KEY, value TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS post_translations (
+        post_id TEXT NOT NULL REFERENCES posts(post_id), input_hash TEXT NOT NULL,
+        locale TEXT NOT NULL, model TEXT NOT NULL, prompt_version TEXT NOT NULL,
+        text_zh TEXT NOT NULL, created_at TEXT NOT NULL,
+        PRIMARY KEY(post_id,input_hash,locale,prompt_version)
+      );
       CREATE TABLE IF NOT EXISTS ai_requests (
         request_key TEXT PRIMARY KEY, month TEXT NOT NULL, status TEXT NOT NULL,
         reserved_cny REAL NOT NULL, actual_cny REAL,
@@ -118,6 +124,8 @@ def save_posts(db, posts):
 
 
 def snapshot(db, version=None):
+    from translations import translated
+    chinese = translated(db)
     events = []
     for row in db.execute("SELECT * FROM reset_events WHERE confidence IN ('ai-direct','ai-context') ORDER BY published_at DESC"):
         event = dict(row)
@@ -128,6 +136,8 @@ def snapshot(db, version=None):
           JOIN post_analyses a USING(analysis_id) WHERE e.event_id=? ORDER BY p.created_at,a.created_at
         ''', (event['event_id'],))]
         evidence = list({x['post_id']: x for x in evidence}.values())
+        for post in evidence:
+            post['text_zh'] = chinese.get(post['post_id'])
         event.update(root_id=event['event_id'], source_urls=[x['url'] for x in evidence],
                      evidence=evidence, scope_verified=False,
                      activity_at=max((x['created_at'] for x in evidence),default=event['published_at']))
@@ -142,6 +152,7 @@ def snapshot(db, version=None):
       ORDER BY p.created_at DESC''', (version,version)):
         message = {k: row[k] for k in ('post_id','text','url','created_at','is_reply','reply_to_id','quote_id',
                                      'quoted_text','community_note','category','analyzed_at')}
+        message['text_zh'] = chinese.get(row['post_id'])
         result = json.loads(row['result_json'])
         link = db.execute('SELECT event_id FROM event_posts WHERE analysis_id=? AND post_id=? LIMIT 1',
                           (row['analysis_id'], row['post_id'])).fetchone()
@@ -161,7 +172,7 @@ def snapshot(db, version=None):
     posts = db.execute('SELECT count(*),min(created_at),max(created_at) FROM posts').fetchone()
     jobs = [dict(x) for x in db.execute("SELECT * FROM collection_jobs WHERE kind='backfill' ORDER BY requested_start")]
     analyzed = db.execute("SELECT count(DISTINCT p.post_id) FROM posts p JOIN post_analyses a USING(post_id) WHERE a.engine='qwen' AND a.input_hash=p.content_hash AND (? IS NULL OR a.prompt_version=?)",(version,version)).fetchone()[0]
-    return {'events': events, 'messages': messages, 'analysis': {'reviewed': analyzed, 'total': posts[0]},
+    return {'events': events, 'messages': messages, 'translation': {'locale':'zh-CN','translated':sum(bool(p.get('text_zh')) for p in messages),'total':len(messages)}, 'analysis': {'reviewed': analyzed, 'total': posts[0]},
             'collection': {'posts': posts[0], 'oldest_post': posts[1],
             'newest_post': posts[2], 'windows': jobs,
             'coverage_note': '仅表示公开 RSS 返回的记录；不保证覆盖 X 的全部原帖或回复。'},

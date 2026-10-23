@@ -9,3 +9,13 @@
 .feed-original{font-size:14px;line-height:1.85;margin:12px 0;color:var(--ink)}.feed-toolbar{flex-wrap:wrap;gap:12px}.tabs{flex-wrap:wrap;gap:18px}.archive-disclosure{margin:25px 0}.archive-disclosure>summary{cursor:pointer;color:var(--green);padding:14px 0}.archive-disclosure .feed-section{margin-top:20px}.hero-copy>p{white-space:pre-wrap;overflow-wrap:anywhere;max-height:140px;overflow:auto;font-size:12px}.event-main details{font-size:12px;color:var(--muted)}@media(max-width:760px){.tabs{gap:15px}.feed-original{font-size:13px}.hero-copy>p{max-width:100%;max-height:140px}.radar-art{opacity:.12}.hero-copy{position:relative;z-index:1}}
 
 @media(max-width:420px){.hero h2{font-size:25px}}
+
+/* Pointer clock replaces the lightning illustration; original radar rules remain for legacy styling. */
+.clock-art{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:24px;overflow:visible}
+.clock-halo{position:absolute;width:320px;height:320px;border:1px solid #cee6c225;border-radius:50%;box-shadow:0 0 0 24px #b8d6b006,0 0 0 48px #b8d6b004}
+.station-clock{position:relative;width:252px;height:252px;filter:drop-shadow(0 14px 30px #091e2144)}
+.clock-rim{fill:#36584a;stroke:#aecf9f;stroke-width:1}.clock-face{fill:#edf1dd}.clock-marks line{stroke:#486b54;stroke-width:2;stroke-linecap:round}
+.clock-hour,.clock-minute{stroke:#284c3b;stroke-linecap:round;stroke-width:6}.clock-minute{stroke-width:4}.clock-second{stroke:#87a476;stroke-width:1.5}.clock-pin{fill:#284c3b}.clock-word{fill:#8a9f85;font:7px ui-monospace,monospace;text-anchor:middle;letter-spacing:2px}.clock-label{position:relative;color:#bfd1bb;font-size:11px;letter-spacing:2px}
+.translation-label{font-size:10px;color:#7a8874}.original-copy{margin-top:12px;padding:11px 13px;background:#eef1e8;border:1px solid #e1e7da;border-radius:7px}.original-copy summary{cursor:pointer;color:#55704c;font-size:11px}.original-copy .post-text{color:#6d7867;font-size:12px;line-height:1.8}.post-evidence .original-copy{margin-bottom:17px}
+@media(max-width:1100px){.station-clock{width:210px;height:210px}.clock-halo{width:240px;height:240px}}
+@media(max-width:760px){.clock-art{right:-68px;top:135px;opacity:.15;gap:0}.station-clock{width:185px;height:185px}.clock-halo,.clock-label{display:none}.hero-copy>p{font-size:12px;line-height:1.85}.feed-original{font-size:14px}}
