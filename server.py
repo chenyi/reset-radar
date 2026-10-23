@@ -312,6 +312,7 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == '__main__':
     initial_db = storage.connect(DB_FILE)
     collector.separate_archived_notes(initial_db)
+    collector.repair_archived_previews(initial_db)
     revalidate_current(initial_db)
     recover_requests(initial_db)
     initial_db.close()

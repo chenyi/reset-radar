@@ -27,15 +27,18 @@ class TextParser(HTMLParser):
         self.quote_depth = 0
         self.bold = False
         self.in_note = False
+        self.in_preview = False
         self.body, self.quote, self.note = [], [], []
 
     def handle_starttag(self, tag, attrs):
+        if tag=='hr' and not self.quote_depth:
+            self.in_preview=True
         if tag in ('b', 'strong'):
             self.bold = True
         if tag == 'blockquote':
             self.quote_depth += 1
         if tag in ('p', 'br'):
-            (self.note if self.in_note else self.quote if self.quote_depth else self.body).append('\n')
+            self.append_text('\n')
 
     def handle_endtag(self, tag):
         if tag in ('b', 'strong'):
@@ -44,9 +47,14 @@ class TextParser(HTMLParser):
             self.quote_depth = max(0, self.quote_depth - 1)
 
     def handle_data(self, data):
-        if self.bold and data.strip() == 'Community note:':
+        if self.bold and not self.quote_depth and data.strip() == 'Community note:':
             self.in_note = True
-        (self.note if self.in_note else self.quote if self.quote_depth else self.body).append(data)
+        self.append_text(data)
+
+    def append_text(self, text):
+        stream=self.quote if self.quote_depth else self.note if self.in_note else self.body if not self.in_preview else None
+        if stream is not None:
+            stream.append(text)
 
 
 def parse_feed(raw, source_url):
@@ -94,6 +102,20 @@ def separate_archived_notes(db):
                 post['first_fetched_at'] = row['first_fetched_at']
                 post['last_fetched_at'] = row['last_fetched_at']
             save_posts(db, parsed)
+
+
+def repair_archived_previews(db):
+    if get_state(db,'body_parser_version',0)>=2:
+        return
+    with db:
+        for row in db.execute("SELECT * FROM posts WHERE raw_payload LIKE '%&lt;hr%'").fetchall():
+            raw=('<rss><channel><ttl>40</ttl>'+row['raw_payload']+'</channel></rss>').encode()
+            for post in parse_feed(raw,row['source_url'])[0]:
+                if post['content_hash']!=row['content_hash']:
+                    post['first_fetched_at']=row['first_fetched_at']
+                    post['last_fetched_at']=row['last_fetched_at']
+                    save_posts(db,[post])
+        set_state(db,'body_parser_version',2)
 
 
 def fetch(url):

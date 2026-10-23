@@ -93,6 +93,12 @@ class ArchiveTests(unittest.TestCase):
         classify_candidates(self.db)
         self.assertEqual(self.db.execute('SELECT count(*) FROM reset_events').fetchone()[0],0)
 
+    def test_link_preview_is_not_author_text_and_quote_stays_separate(self):
+        raw=feed(text='Loading a banked reset</p><hr/><b>Link</b><p>Website preview: all limits reset already')
+        post=collector.parse_feed(raw,'u')[0][0]
+        self.assertEqual(post['text'],'Loading a banked reset')
+        self.assertEqual(post['quoted_text'],"Other author's reset is done")
+
     def test_migration_preserves_existing_posts_and_adds_classification(self):
         path=Path(self.temp.name)/'legacy.db'
         import sqlite3
