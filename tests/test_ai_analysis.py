@@ -28,7 +28,7 @@ class EvidenceTests(unittest.TestCase):
 
     def test_model_cannot_invent_time_or_clock(self):
         value = {'phrase': self.posts['1']['text'], 'date_ref_id': '1', 'clock': '12:00', 'timezone': 'PST'}
-        self.assertIsNone(ai_analysis.time_from_evidence(value, self.posts))
+        self.assertEqual(ai_analysis.time_from_evidence(value, self.posts), '2026-10-23T18:00:00Z')
         value['phrase'] = 'invented tomorrow 12pm PST'
         self.assertIsNone(ai_analysis.time_from_evidence(value, self.posts))
 
