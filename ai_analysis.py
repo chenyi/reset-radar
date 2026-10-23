@@ -21,7 +21,7 @@ PROMPT = '''你是公开消息的保守整理员，只输出 JSON。输入原帖
 一件事的补充回复用同一个 anchor_id（最初公告的 ID）；anchor 必须来自输入。已知事件可引用 event_id，但不能把不同日期的独立重置合并。reply_to_id 为空表示父帖未知，不能声称已确认父子关系。孤立的 Done/yes 不足以证明完成。上下文推断须 confidence=contextual；无法确定则 unconfirmed。
 时间到期绝不自动表示完成。完成必须有作者明确的已重置表述。PST 严格为 UTC-8，PT 随洛杉矶夏令时。tomorrow 按该时区的发帖当地日期计算，不能用 UTC 日期。small ship 是小功能上线，不能译为飞船。
 如果作者在公告后很快补充 Landing/Lands tomorrow 等未来安排，同次公告按未来预告处理；that’s a reset 或 reset day today 不能压过明确的后续未来安排而被误判成完成。对同次事件综合关联证据，补充时间的回复分类为 progress，主公告分类为 forecast。
-每个 target 必须有一条分析。JSON 格式：{"analyses":[{"post_id":"输入ID","relevant":false,"reason":"排除理由"}]}。
+只输出 targets 中的 ID，每个恰好一条；context 其他 ID 只作上下文，绝对不能额外输出。JSON 格式：{"analyses":[{"post_id":"输入ID","relevant":false,"reason":"排除理由"}]}。
 严格遵守返回 schema。不相关时只输出 post_id、relevant=false、reason，相关时输出完整字段。
 相关时 anchor_id 为该次公告，不可晚于当前 target 发布时间；不能把相邻两天的独立重置关联。同一个时间表述出现在不同日期，分别属于各自当天公告。不能找到已知关联时 anchor_id=target ID，confidence=contextual。state 综合同次公告和补充，category 只描述当前 target。
 evidence.quote 必须是作者原文的连续片段，禁止插入省略号、改写或翻译；<=180字符。time.phrase 必须逐字出现在 date_ref_id 原帖。没有明确日期或时间则 time=null，不编造。自身和引用者观点必须区分，其他作者的引用内容不能作为 Tibo 的完成证据。'''
@@ -31,10 +31,11 @@ def object_schema(properties):
     return {'type': 'object', 'properties': properties, 'required': list(properties), 'additionalProperties': False}
 
 
-def output_schema():
+def output_schema(target_ids):
     string = {'type': 'string'}
+    identity = {'type':'string','enum':target_ids}
     time_schema = object_schema({'phrase': string, 'date_ref_id': string})
-    item = object_schema({'post_id': string, 'relevant': {'type':'boolean','enum':[True]},
+    item = object_schema({'post_id': identity, 'relevant': {'type':'boolean','enum':[True]},
         'category': {'type':'string','enum':['forecast','progress','completed','credit','correction']},
         'reason': string, 'anchor_id': {'type':['string','null']}, 'event_id': {'type':['string','null']},
         'type': {'type':'string','enum':['reset','credit']},
@@ -45,8 +46,8 @@ def output_schema():
             'role':{'type':'string','enum':['forecast','update','completed','cancelled']}})},
         'time': {'anyOf':[time_schema,{'type':'null'}]}})
     return {'type':'json_schema','json_schema':{'name':'tibo_classification','strict':True,
-        'schema':object_schema({'analyses':{'type':'array','items':{'anyOf':[item,
-            object_schema({'post_id':string,'relevant':{'type':'boolean','enum':[False]},'reason':string})]}}})}}
+        'schema':object_schema({'analyses':{'type':'array','minItems':len(target_ids),'maxItems':len(target_ids),
+            'items':{'anyOf':[item,object_schema({'post_id':identity,'relevant':{'type':'boolean','enum':[False]},'reason':string})]}}})}}
 
 
 def time_from_evidence(value, posts):
@@ -122,7 +123,9 @@ def validate(entry, posts, targets):
     anchor_date = datetime.fromisoformat(posts[anchor]['created_at'].replace('Z', '+00:00'))
     target_date = datetime.fromisoformat(posts[post_id]['created_at'].replace('Z', '+00:00'))
     if not 0 <= (target_date - anchor_date).total_seconds() <= 3 * 86400:
-        raise ValueError('Event association exceeds supplied local context')
+        anchor = post_id
+        entry['event_id'] = None
+        entry['confidence'] = 'contextual'
     if entry.get('state') not in ('scheduled', 'announced', 'completed', 'cancelled', 'unconfirmed'):
         raise ValueError('Invalid event state')
     evidence = entry.get('evidence', [])
@@ -181,7 +184,11 @@ def make_input(db, targets):
         if len(json.dumps(context + [value], ensure_ascii=False).encode()) > 24000:
             continue
         context.append(value)
-    known = [dict(x) for x in db.execute("SELECT event_id,title,state,published_at FROM reset_events WHERE confidence IN ('ai-direct','ai-context') ORDER BY published_at DESC LIMIT 20")]
+    known = [dict(x) for x in db.execute("""SELECT e.event_id,e.title,e.state,e.published_at FROM reset_events e
+      WHERE e.confidence IN ('ai-direct','ai-context') AND EXISTS
+      (SELECT 1 FROM event_posts ep JOIN post_analyses a USING(analysis_id)
+       WHERE ep.event_id=e.event_id AND a.engine='qwen' AND a.relevant=1 AND a.prompt_version=?)
+      ORDER BY e.published_at DESC LIMIT 20""",(VERSION,))]
     document = {'targets': [p['post_id'] for p in targets], 'context': context, 'known_events': known}
     # Full records remain in the private input snapshot; evidence may refer only to supplied context.
     supplied = {p['post_id']: posts[p['post_id']] for p in context}
@@ -239,7 +246,7 @@ def analyze_batch(db):
     body = {'model': MODEL, 'messages': [{'role': 'system', 'content': PROMPT},
             {'role': 'user', 'content': json.dumps(document, ensure_ascii=False)}],
             'enable_thinking': False, 'enable_search': False, 'max_tokens': 4096,
-            'temperature': 0.1, 'response_format': output_schema()}
+            'temperature': 0.1, 'response_format': output_schema([p['post_id'] for p in targets])}
     raw = json.dumps(body, ensure_ascii=False).encode()
     if len(raw) > 32000:
         raise ValueError('Analysis input exceeds verified pricing tier')
