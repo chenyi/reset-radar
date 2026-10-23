@@ -1,7 +1,6 @@
-import json
-import os
 import time
 from datetime import datetime, timezone
+from functools import lru_cache
 
 from storage import get_state, now, set_state
 
@@ -10,19 +9,25 @@ class FundingUnavailable(RuntimeError):
     pass
 
 
-def query(action, **queries):
+@lru_cache(maxsize=1)
+def client():
     from alibabacloud_credentials.client import Client as Credentials
     from alibabacloud_credentials.models import Config as CredentialsConfig
     from alibabacloud_tea_openapi.client import Client
-    from alibabacloud_tea_openapi.models import Config, Params, OpenApiRequest
-    from alibabacloud_tea_util.models import RuntimeOptions
+    from alibabacloud_tea_openapi.models import Config
 
     credential = Credentials(CredentialsConfig(type='ecs_ram_role', role_name='reset-radar-coupon-reader'))
-    client = Client(Config(credential=credential, endpoint='business.aliyuncs.com'))
+    return Client(Config(credential=credential, endpoint='business.aliyuncs.com'))
+
+
+def query(action, **queries):
+    from alibabacloud_tea_openapi.models import Params, OpenApiRequest
+    from alibabacloud_tea_util.models import RuntimeOptions
+    from alibabacloud_openapi_util.client import Client as OpenApiUtil
     params = Params(action=action, version='2017-12-14', protocol='HTTPS', method='POST',
                     auth_type='AK', style='RPC', pathname='/', req_body_type='formData', body_type='json')
     try:
-        payload = client.call_api(params, OpenApiRequest(query=queries),
+        payload = client().call_api(params, OpenApiRequest(query=OpenApiUtil.query(queries)),
                                   RuntimeOptions(connect_timeout=5000, read_timeout=20000, autoretry=False))['body']
     except Exception as exc:
         raise FundingUnavailable('代金券查询暂不可用') from exc
