@@ -144,6 +144,13 @@ def snapshot(db, version=None):
     if version:
         eligible = {m['event_id'] for m in messages}
         events = [e for e in events if e['event_id'] in eligible]
+    by_event = {e['event_id']: e for e in events}
+    for message in messages:
+        event = by_event.get(message['event_id'])
+        if (event and not message['is_reply'] and message['category']=='progress'
+                and event['state'] in ('scheduled','announced') and event['expected_at']):
+            message['category'] = 'forecast'
+            message['reason'] += ' 同一事件已关联作者的具体时间补充。'
     posts = db.execute('SELECT count(*),min(created_at),max(created_at) FROM posts').fetchone()
     jobs = [dict(x) for x in db.execute("SELECT * FROM collection_jobs WHERE kind='backfill' ORDER BY requested_start")]
     analyzed = db.execute("SELECT count(DISTINCT p.post_id) FROM posts p JOIN post_analyses a USING(post_id) WHERE a.engine='qwen' AND a.input_hash=p.content_hash AND (? IS NULL OR a.prompt_version=?)",(version,version)).fetchone()[0]

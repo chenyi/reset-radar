@@ -24,25 +24,25 @@ PROMPT = '''你是公开消息的保守整理员，只输出 JSON。输入原帖
 只输出 targets 中的 ID，每个恰好一条；context 其他 ID 只作上下文，绝对不能额外输出。JSON 格式：{"analyses":[{"post_id":"输入ID","relevant":false,"reason":"排除理由"}]}。
 严格遵守返回 schema。不相关时只输出 post_id、relevant=false、reason，相关时输出完整字段。
 相关时 anchor_id 为该次公告，不可晚于当前 target 发布时间；不能把相邻两天的独立重置关联。同一个时间表述出现在不同日期，分别属于各自当天公告。不能找到已知关联时 anchor_id=target ID，confidence=contextual。state 综合同次公告和补充，category 只描述当前 target。
-evidence.quote 必须是作者原文的连续片段，禁止插入省略号、改写或翻译；<=180字符。time.phrase 必须逐字出现在 date_ref_id 原帖。没有明确日期或时间则 time=null，不编造。自身和引用者观点必须区分，其他作者的引用内容不能作为 Tibo 的完成证据。'''
+evidence 只给原帖 ID 和 role，服务端会从已存原文取得引用，不要改写引用。必须包含当前 target ID。time.phrase 必须逐字出现在 date_ref_id 原帖。没有明确日期或时间则 time=null，不编造。自身和引用者观点必须区分，其他作者的引用内容不能作为 Tibo 的完成证据。'''
 
 
 def object_schema(properties):
     return {'type': 'object', 'properties': properties, 'required': list(properties), 'additionalProperties': False}
 
 
-def output_schema(target_ids):
+def output_schema(target_ids, context_ids):
     string = {'type': 'string'}
     identity = {'type':'string','enum':target_ids}
     time_schema = object_schema({'phrase': string, 'date_ref_id': string})
     item = object_schema({'post_id': identity, 'relevant': {'type':'boolean','enum':[True]},
         'category': {'type':'string','enum':['forecast','progress','completed','credit','correction']},
-        'reason': string, 'anchor_id': {'type':['string','null']}, 'event_id': {'type':['string','null']},
+        'reason': string, 'anchor_id': {'type':'string','enum':context_ids},
         'type': {'type':'string','enum':['reset','credit']},
         'state': {'type':'string','enum':['scheduled','announced','completed','cancelled','unconfirmed']},
         'scope': {'type':'string','enum':['unknown','global','paid','plus-pro-business']}, 'scope_quote': string,
         'confidence': {'type':'string','enum':['direct','contextual']},
-        'evidence': {'type':'array','items':object_schema({'post_id':string,'quote':string,
+        'evidence': {'type':'array','items':object_schema({'post_id':{'type':'string','enum':context_ids},
             'role':{'type':'string','enum':['forecast','update','completed','cancelled']}})},
         'time': {'anyOf':[time_schema,{'type':'null'}]}})
     return {'type':'json_schema','json_schema':{'name':'tibo_classification','strict':True,
@@ -100,7 +100,7 @@ def time_from_evidence(value, posts):
 
 
 def completion_supported(evidence, posts):
-    text = ' '.join(x['quote'] for x in evidence)
+    text = ' '.join(x['quote'] for x in evidence).replace('’', "'")
     return bool(re.search(r"\b(?:we(?:'ve| have)?|i(?:'ve| have)?)\s+(?:just\s+)?reset\b|\ball (?:your )?(?:codex )?limits?\s+(?:(?:have been|are now|are|were|got)\s+)?reset\b|\blimits?.{0,30}\b(?:have been|are now|were)\s+reset\b|\breset.{0,20}\b(?:done|completed|complete)\b|\breset[.!]\s*Enjoy\b", text, re.I))
 
 
@@ -120,6 +120,7 @@ def validate(entry, posts, targets):
     anchor = str(entry.get('anchor_id'))
     if anchor not in posts or entry.get('type') not in ('reset', 'credit'):
         raise ValueError('Invalid event anchor')
+    entry['type'] = 'credit' if entry['category']=='credit' else 'reset'
     anchor_date = datetime.fromisoformat(posts[anchor]['created_at'].replace('Z', '+00:00'))
     target_date = datetime.fromisoformat(posts[post_id]['created_at'].replace('Z', '+00:00'))
     if not 0 <= (target_date - anchor_date).total_seconds() <= 3 * 86400:
@@ -128,23 +129,26 @@ def validate(entry, posts, targets):
         entry['confidence'] = 'contextual'
     if entry.get('state') not in ('scheduled', 'announced', 'completed', 'cancelled', 'unconfirmed'):
         raise ValueError('Invalid event state')
-    evidence = entry.get('evidence', [])
+    evidence = entry.setdefault('evidence', [])
     if not evidence:
-        raise ValueError('Missing evidence')
+        evidence.append({'post_id':post_id,'quote':posts[post_id]['text'],'role':'update'})
     for item in evidence:
         item['post_id'] = str(item.get('post_id'))
+        if item['post_id'] in posts and 'quote' not in item:
+            item['quote'] = posts[item['post_id']]['text']
         if (item['post_id'] not in posts or not item.get('quote')
                 or item['quote'] not in posts[item['post_id']]['text']
                 or item.get('role') not in ('forecast', 'update', 'completed', 'cancelled')):
             raise ValueError('Evidence is not an original excerpt')
     if post_id not in {x['post_id'] for x in evidence}:
-        raise ValueError('Target is missing from evidence')
+        evidence.append({'post_id':post_id,'quote':posts[post_id]['text'],'role':'update'})
     if entry['category'] == 'credit' and not any(re.search(r'\breset[- ](?:cards?|credits?)\b', posts[x['post_id']]['text'], re.I) for x in evidence):
         entry.update(relevant=False,category=None,reason='未提供重置卡发放或使用的原文依据，普通补偿不归入重置卡。')
         return entry
-    if entry['type'] == 'reset' and completion_supported(evidence, posts):
+    target_evidence = [x for x in evidence if x['post_id']==post_id]
+    if entry['type'] == 'reset' and completion_supported(target_evidence, posts):
         entry.update(state='completed',category='completed')
-    if entry['state'] == 'completed' and not completion_supported(evidence, posts):
+    if entry['state'] == 'completed' and not completion_supported(target_evidence, posts):
         entry['state'] = 'unconfirmed'
         if entry['category'] == 'completed':
             entry['category'] = 'progress'
@@ -202,11 +206,6 @@ def apply_result(db, entry, posts, analysis_id):
         return
     anchor = entry['anchor_id']
     event_id = 'tibo-' + anchor
-    previous = entry.get('event_id')
-    if previous and previous != event_id:
-        linked = db.execute('SELECT p.post_id FROM event_posts p WHERE p.event_id=?', (previous,)).fetchall()
-        if set(x[0] for x in linked) & {x['post_id'] for x in entry['evidence']}:
-            event_id = previous
     latest = max(posts[x['post_id']]['created_at'] for x in entry['evidence'])
     prior_date = db.execute('SELECT max(p.created_at) FROM event_posts e JOIN posts p USING(post_id) WHERE e.event_id=?', (event_id,)).fetchone()[0]
     time_value = entry.get('time') or {}
@@ -246,7 +245,7 @@ def analyze_batch(db):
     body = {'model': MODEL, 'messages': [{'role': 'system', 'content': PROMPT},
             {'role': 'user', 'content': json.dumps(document, ensure_ascii=False)}],
             'enable_thinking': False, 'enable_search': False, 'max_tokens': 4096,
-            'temperature': 0.1, 'response_format': output_schema([p['post_id'] for p in targets])}
+            'temperature': 0.1, 'response_format': output_schema([p['post_id'] for p in targets], list(supplied))}
     raw = json.dumps(body, ensure_ascii=False).encode()
     if len(raw) > 32000:
         raise ValueError('Analysis input exceeds verified pricing tier')
