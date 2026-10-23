@@ -16,6 +16,8 @@ from email.utils import format_datetime
 import collector
 import storage
 from analyzer import classify_candidates
+from ai_analysis import analyze_batch
+from billing_guard import FundingUnavailable
 
 ROOT = Path(__file__).resolve().parent
 # Legacy mirror recovery code is retained; runtime collection now uses collector.py.
@@ -50,7 +52,8 @@ def summarize(data, now=None):
     checked = timestamp(data.get('source_checked_at'))
     stale = not (data.get('sync_ok') and data.get('source_healthy') and checked is not None and 0 <= now - checked <= data.get('fresh_seconds', 1800))
     events = sorted(data.get('events', []), key=lambda e: timestamp(e.get('published_at')) or 0, reverse=True)
-    latest = events[0] if events else None
+    analyzed = [e for e in events if e.get('confidence') != 'candidate']
+    latest = analyzed[0] if analyzed else events[0] if events else None
     completed_roots = {e.get('root_id') or e['event_id'] for e in events if e.get('state') in ('completed', 'cancelled')}
     upcoming = None
     # Only the latest public event can set the current countdown. Old forecasts never resurface.
@@ -138,15 +141,36 @@ def sync_loop():
 
 
 def backfill_loop():
-    db = storage.connect(DB_FILE)
-    try:
-        collector.backfill(db, os.environ.get('HISTORY_START', '2026-04-23'),
-                           os.environ.get('HISTORY_END', '2026-10-24'))
-    except Exception as exc:
-        print(f'Historical collection paused: {type(exc).__name__}; checkpoint retained', flush=True)
-    finally:
-        classify_candidates(db)
-        db.close()
+    while True:
+        db = storage.connect(DB_FILE)
+        try:
+            collector.backfill(db, os.environ.get('HISTORY_START', '2026-04-23'),
+                               os.environ.get('HISTORY_END', '2026-10-24'))
+            remaining = db.execute("SELECT count(*) FROM collection_jobs WHERE kind='backfill' AND status!='source_exhausted'").fetchone()[0]
+            if not remaining:
+                return
+        except Exception as exc:
+            print(f'Historical collection paused: {type(exc).__name__}; checkpoint retained', flush=True)
+        finally:
+            classify_candidates(db)
+            db.close()
+        time.sleep(300)
+
+
+def analysis_loop():
+    while True:
+        db = storage.connect(DB_FILE)
+        try:
+            worked = analyze_batch(db)
+        except Exception as exc:
+            worked = False
+            with db:
+                storage.set_state(db, 'ai_status', {'enabled': False, 'reason':
+                    str(exc) if isinstance(exc, FundingUnavailable) else 'AI 分析暂不可用，原帖归档继续'})
+            print(f'AI analysis paused: {type(exc).__name__}: {str(exc)[:250]}', flush=True)
+        finally:
+            db.close()
+        time.sleep(3 if worked else 60)
 
 
 def snapshot():
@@ -165,7 +189,7 @@ def snapshot():
 
 def event_title(event):
     if event.get('title'):
-        return event['title']
+        return STATE_LABELS.get(event.get('state'), '待确认') + ' · ' + event['title']
     kind = '重置卡' if event.get('type') == 'credit' else '额度重置'
     return kind + ' · ' + STATE_LABELS.get(event.get('state'), '待确认')
 
@@ -289,6 +313,7 @@ if __name__ == '__main__':
             pass
     threading.Thread(target=sync_loop, daemon=True).start()
     threading.Thread(target=backfill_loop, daemon=True).start()
+    threading.Thread(target=analysis_loop, daemon=True).start()
     server = ThreadingHTTPServer((os.environ.get('HOST', '127.0.0.1'), int(os.environ.get('PORT', '8787'))), Handler)
     server.timeout = 15
     print('Reset Radar is listening', flush=True)

@@ -12,6 +12,7 @@ Environment=HOST=0.0.0.0
 Environment=PORT=80
 Environment=PUBLIC_ORIGIN=http://47.237.1.108
 Environment=SYNC_INTERVAL=300
+EnvironmentFile=-/etc/reset-radar/ai.env
 StateDirectory=reset-radar
 Restart=on-failure
 RestartSec=5

@@ -91,7 +91,7 @@ def save_posts(db, posts):
 
 def snapshot(db):
     events = []
-    for row in db.execute('SELECT * FROM reset_events ORDER BY published_at DESC'):
+    for row in db.execute("SELECT * FROM reset_events WHERE confidence!='dismissed' ORDER BY published_at DESC"):
         event = dict(row)
         evidence = [dict(x) for x in db.execute('''
           SELECT p.post_id,p.text,p.created_at,p.url,p.is_reply,p.reply_to_id,
