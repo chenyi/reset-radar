@@ -116,7 +116,7 @@ def snapshot(db, version=None):
     for row in db.execute("SELECT * FROM reset_events WHERE confidence IN ('ai-direct','ai-context') ORDER BY published_at DESC"):
         event = dict(row)
         evidence = [dict(x) for x in db.execute('''
-          SELECT p.post_id,p.text,p.created_at,p.url,p.is_reply,p.reply_to_id,
+          SELECT p.post_id,p.text,p.created_at,p.url,p.is_reply,p.reply_to_id,p.quote_id,
                  p.quoted_text,p.community_note,p.source_url,e.role,e.evidence,a.engine,a.model,a.prompt_version
           FROM event_posts e JOIN posts p USING(post_id)
           JOIN post_analyses a USING(analysis_id) WHERE e.event_id=? ORDER BY p.created_at,a.created_at
@@ -134,7 +134,7 @@ def snapshot(db, version=None):
       AND a.analysis_id=(SELECT max(b.analysis_id) FROM post_analyses b
         WHERE b.post_id=p.post_id AND b.engine='qwen' AND b.input_hash=p.content_hash)
       ORDER BY p.created_at DESC''', (version,version)):
-        message = {k: row[k] for k in ('post_id','text','url','created_at','is_reply','reply_to_id',
+        message = {k: row[k] for k in ('post_id','text','url','created_at','is_reply','reply_to_id','quote_id',
                                      'quoted_text','community_note','category','analyzed_at')}
         result = json.loads(row['result_json'])
         link = db.execute('SELECT event_id FROM event_posts WHERE analysis_id=? AND post_id=? LIMIT 1',
@@ -168,7 +168,7 @@ def list_posts(db, query='', offset=0, limit=20):
     pattern = '%' + query[:200] + '%'
     where = 'text LIKE ? OR created_at LIKE ? OR post_id LIKE ?'
     count = db.execute('SELECT count(*) FROM posts WHERE ' + where, (pattern,) * 3).fetchone()[0]
-    rows = db.execute('''SELECT post_id,author,text,created_at,url,is_reply,reply_to_id,quoted_text,community_note,
+    rows = db.execute('''SELECT post_id,author,text,created_at,url,is_reply,reply_to_id,quote_id,quoted_text,community_note,
       source_url,last_fetched_at FROM posts WHERE ''' + where + ' ORDER BY created_at DESC LIMIT ? OFFSET ?',
       (pattern, pattern, pattern, limit, offset)).fetchall()
     return {'posts': [dict(x) for x in rows], 'total': count, 'offset': offset,

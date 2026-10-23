@@ -28,9 +28,18 @@ class TextParser(HTMLParser):
         self.bold = False
         self.in_note = False
         self.in_preview = False
+        self.cite_depth = 0
+        self.quote_id = None
         self.body, self.quote, self.note = [], [], []
 
     def handle_starttag(self, tag, attrs):
+        if tag=='cite':
+            self.cite_depth+=1
+        if tag=='a' and self.quote_depth==1 and self.cite_depth:
+            link=urllib.parse.urlsplit(dict(attrs).get('href') or '')
+            match=re.fullmatch(r'/thsottiaux/status/(\d+)',link.path,re.I)
+            if link.hostname in ('nitter.kareem.one','x.com','twitter.com') and match:
+                self.quote_id=match[1]
         if tag=='hr' and not self.quote_depth:
             self.in_preview=True
         if tag in ('b', 'strong'):
@@ -41,10 +50,14 @@ class TextParser(HTMLParser):
             self.append_text('\n')
 
     def handle_endtag(self, tag):
+        if tag=='cite':
+            self.cite_depth=max(0,self.cite_depth-1)
         if tag in ('b', 'strong'):
             self.bold = False
         if tag == 'blockquote':
             self.quote_depth = max(0, self.quote_depth - 1)
+            if not self.quote_depth:
+                self.cite_depth=0
 
     def handle_data(self, data):
         if self.bold and not self.quote_depth and data.strip() == 'Community note:':
@@ -83,10 +96,10 @@ def parse_feed(raw, source_url):
         post = {'post_id': match[1], 'author': AUTHOR, 'text': text,
                 'created_at': created, 'url': f'https://x.com/{AUTHOR}/status/{match[1]}',
                 'is_reply': int(title.startswith('R to @')), 'reply_to_id': None,
-                'conversation_id': None, 'quote_id': None, 'quoted_text': quoted or None,
+                'conversation_id': None, 'quote_id': parser.quote_id, 'quoted_text': quoted or None,
                 'community_note': ''.join(parser.note).strip() or None,
                 'raw_payload': ET.tostring(item, encoding='unicode'), 'source_url': source_url,
-                'content_hash': hashlib.sha256((text + '\n' + quoted).encode()).hexdigest(),
+                'content_hash': hashlib.sha256((text + '\n' + quoted + ('\nquote:'+parser.quote_id if parser.quote_id else '')).encode()).hexdigest(),
                 'first_fetched_at': fetched, 'last_fetched_at': fetched}
         posts.append(post)
     return posts, max(2400, int(channel.findtext('ttl', '40')) * 60), len(channel.findall('item'))
@@ -105,17 +118,17 @@ def separate_archived_notes(db):
 
 
 def repair_archived_previews(db):
-    if get_state(db,'body_parser_version',0)>=2:
+    if get_state(db,'body_parser_version',0)>=3:
         return
     with db:
-        for row in db.execute("SELECT * FROM posts WHERE raw_payload LIKE '%&lt;hr%'").fetchall():
+        for row in db.execute("SELECT * FROM posts WHERE raw_payload LIKE '%&lt;hr%' OR raw_payload LIKE '%&lt;blockquote%'").fetchall():
             raw=('<rss><channel><ttl>40</ttl>'+row['raw_payload']+'</channel></rss>').encode()
             for post in parse_feed(raw,row['source_url'])[0]:
                 if post['content_hash']!=row['content_hash']:
                     post['first_fetched_at']=row['first_fetched_at']
                     post['last_fetched_at']=row['last_fetched_at']
                     save_posts(db,[post])
-        set_state(db,'body_parser_version',2)
+        set_state(db,'body_parser_version',3)
 
 
 def fetch(url):

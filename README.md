@@ -15,7 +15,7 @@
 
 状态目录中的 `radar.db` 使用 WAL 与外键。表包括 `posts`、`post_analyses`、`reset_events`、`event_posts`、`collection_jobs`、`sync_state`、`ai_requests`。
 
-原帖 ID 使用 TEXT；时间使用 UTC，页面显示北京时间。分析保存输入快照与版本。历史采集不补发旧通知。
+原帖 ID 使用 TEXT；时间使用 UTC，页面显示北京时间。分析保存输入快照与版本。历史消息保留原始发布时间；RSS 是否提醒由阅读器决定。
 
 运行时数据库和凭证不进入 GitHub。备份运行中的 SQLite 应使用 `sqlite3.Connection.backup()`，不要只复制主文件。
 
@@ -60,3 +60,5 @@ python3 server.py
 原文分类保存在 `post_analyses.relevant/category`，包括 forecast、progress、completed、credit、correction。页面默认只展示收录结果，不展示 AI 改写标题或摘要；原始归档折叠保留。原文引用和社区注释分别保存，不充当作者本人证据。SQLite schema 迁移版本为 3。
 
 AI 运行依赖安装在 `/opt/reset-radar-tools/python` 虚拟环境，使用 `requirements.txt`。模型响应在 `ai_requests.response_json` 留存，已收到的响应验证重放不会重复调用模型。
+
+引用帖通过 RSS 的引用链接保存 `quote_id`。只有完成用语的引用链能指向 Tibo 的重置公告时，才作为上下文完成回应；孤立的 Done 不当作完成。中断请求仍保留费用预留，每批最多自动重试一次；接口错误详情仅保存于服务器排障状态。

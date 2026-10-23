@@ -1,7 +1,9 @@
 import json
+import io
 import os
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -74,6 +76,16 @@ class EvidenceTests(unittest.TestCase):
            'evidence':[{'post_id':'1','role':'completed'}]}
         result=ai_analysis.validate(e,self.posts,{'1'})
         self.assertEqual((result['category'],result['type']),('completed','reset'))
+
+    def test_done_with_verified_tibo_quote_chain_confirms_completion(self):
+        self.posts['1'].update(text='Done and dusted',quote_id='2')
+        self.posts['2']={'post_id':'2','text':'Landing within the next 2 hours','created_at':'2026-10-23T03:00:00Z','author':'thsottiaux','quote_id':'3'}
+        self.posts['3']={'post_id':'3','text':'Day 10/ Reset','created_at':'2026-10-23T02:59:00Z','author':'thsottiaux','quote_id':None}
+        result=ai_analysis.validate({'post_id':'1','relevant':False,'reason':'Done'},self.posts,{'1'})
+        self.assertEqual((result['relevant'],result['category'],result['state'],result['anchor_id']),(True,'completed','completed','3'))
+        self.assertEqual({p['post_id'] for p in result['evidence']},{'1','2','3'})
+        self.posts['2']['author']='another'
+        self.assertFalse(ai_analysis.validate({'post_id':'1','relevant':False},self.posts,{'1'})['relevant'])
 
     def test_expired_or_non_postpaid_coupon_is_excluded(self):
         c = {'Status': 'Available', 'EffectiveTime': '2026-10-01T00:00:00Z',
@@ -178,6 +190,16 @@ class WorkerTests(unittest.TestCase):
         rows=self.db.execute('SELECT status,reserved_cny FROM ai_requests').fetchall()
         self.assertEqual(len(rows),2)
         self.assertTrue(all(r['status']=='interrupted' and r['reserved_cny']>0 for r in rows))
+
+    def test_provider_error_is_diagnosable_without_disclosing_keys(self):
+        body=json.dumps({'error':{'code':'InvalidParameter','message':'bad schema sk-private-test'}}).encode()
+        error=urllib.error.HTTPError('https://test.invalid',400,'Bad Request',{},io.BytesIO(body))
+        with patch.object(billing_guard,'verify'),patch('ai_analysis.urllib.request.urlopen',side_effect=error):
+            with self.assertRaises(RuntimeError):ai_analysis.analyze_batch(self.db)
+        detail=storage.get_state(self.db,'ai_last_api_error')
+        self.assertEqual(detail['status'],400)
+        self.assertIn('InvalidParameter',detail['detail'])
+        self.assertNotIn('sk-private-test',detail['detail'])
 
 
 if __name__ == '__main__':

@@ -99,6 +99,12 @@ class ArchiveTests(unittest.TestCase):
         self.assertEqual(post['text'],'Loading a banked reset')
         self.assertEqual(post['quoted_text'],"Other author's reset is done")
 
+    def test_tibo_quote_identity_comes_from_citation_link(self):
+        raw=feed(text='Done').replace(b'</blockquote>',b'<footer><cite><a href="https://nitter.kareem.one/thsottiaux/status/2111492673890824348#m">source</a></footer></blockquote>')
+        post=collector.parse_feed(raw,'u')[0][0]
+        self.assertEqual(post['quote_id'],'2111492673890824348')
+        self.assertIsNone(post['reply_to_id'])
+
     def test_migration_preserves_existing_posts_and_adds_classification(self):
         path=Path(self.temp.name)/'legacy.db'
         import sqlite3
