@@ -63,6 +63,18 @@ class EvidenceTests(unittest.TestCase):
                'evidence':[{'post_id':'1','quote':text,'role':'update'}]}
             self.assertFalse(ai_analysis.validate(e,self.posts,{'1'})['relevant'])
 
+    def test_banked_reset_is_a_card_not_an_automatic_full_reset(self):
+        self.posts['1']['text']="Loading a banked reset in everyone's paid accounts."
+        e={'post_id':'1','relevant':True,'category':'forecast','anchor_id':'1','type':'reset','state':'announced',
+           'evidence':[{'post_id':'1','role':'update'}]}
+        result=ai_analysis.validate(e,self.posts,{'1'})
+        self.assertEqual((result['category'],result['type']),('credit','credit'))
+        self.posts['1']['text']="I have reset everyone's Codex usage limits. This is a hard reset given some users had banked resets already."
+        e={'post_id':'1','relevant':True,'category':'completed','anchor_id':'1','type':'reset','state':'completed',
+           'evidence':[{'post_id':'1','role':'completed'}]}
+        result=ai_analysis.validate(e,self.posts,{'1'})
+        self.assertEqual((result['category'],result['type']),('completed','reset'))
+
     def test_expired_or_non_postpaid_coupon_is_excluded(self):
         c = {'Status': 'Available', 'EffectiveTime': '2026-10-01T00:00:00Z',
              'ExpiryTime': '2026-12-01T00:00:00Z', 'Balance': '300',
