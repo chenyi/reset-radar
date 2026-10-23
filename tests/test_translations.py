@@ -27,8 +27,8 @@ class ChineseTranslationsTest(unittest.TestCase):
     def tearDown(self):
         self.posts.stop();self.env.stop();self.db.close();self.temp.cleanup()
 
-    def response(self,identity='1'):
-        result={'id':'translation-test','choices':[{'message':{'content':json.dumps({'translations':[{'post_id':identity,'text_zh':'明天上午 10 点 PST 之前上线。'}]})}}],'usage':{'prompt_tokens':100,'completion_tokens':30}}
+    def response(self,identity='1',text='明天上午 10 点 PST 之前上线。'):
+        result={'id':'translation-test','choices':[{'message':{'content':json.dumps({'translations':[{'post_id':identity,'text_zh':text}]})}}],'usage':{'prompt_tokens':100,'completion_tokens':30}}
         response=MagicMock();response.__enter__.return_value.read.return_value=json.dumps(result).encode()
         return response
 
@@ -68,6 +68,22 @@ class ChineseTranslationsTest(unittest.TestCase):
             with self.assertRaises(billing_guard.FundingUnavailable):translations.translate_batch(self.db)
             self.assertEqual(request.call_count,2)
         self.assertEqual(self.db.execute("SELECT count(*) FROM ai_requests WHERE status='interrupted'").fetchone()[0],2)
+
+    def test_ordinary_reset_is_not_presented_as_a_reset_card(self):
+        with patch.object(billing_guard,'verify'),patch('translations.urllib.request.urlopen',return_value=self.response(text='这是一次重置卡。\\n请使用。')):
+            translations.translate_batch(self.db)
+        self.assertEqual(translations.translated(self.db)['1'],'这是一次额度重置。\n请使用。')
+
+    def test_invalid_batch_splits_without_recharging_the_received_batch(self):
+        self.posts.stop()
+        with self.db:
+            self.db.execute("INSERT INTO posts(post_id,author,text,created_at,url,is_reply,raw_payload,source_url,content_hash,first_fetched_at,last_fetched_at) SELECT '2',author,text,created_at,url,is_reply,raw_payload,source_url,content_hash,first_fetched_at,last_fetched_at FROM posts WHERE post_id='1'")
+        with patch.object(translations,'public_posts',side_effect=lambda db:[dict(p) for p in db.execute('SELECT * FROM posts ORDER BY post_id')]),patch.object(billing_guard,'verify'),patch('translations.urllib.request.urlopen',side_effect=[self.response('wrong'),self.response('1'),self.response('2')]) as request:
+            self.assertTrue(translations.translate_batch(self.db))
+            self.assertTrue(translations.translate_batch(self.db))
+            self.assertFalse(translations.translate_batch(self.db))
+            self.assertEqual(request.call_count,3)
+        self.assertEqual(len(translations.translated(self.db)),2)
 
 
 class NotificationStylesTest(unittest.TestCase):
