@@ -1,0 +1,85 @@
+import copy
+from datetime import datetime, timedelta, timezone
+import json
+import sqlite3
+import unittest
+
+import notifications as n
+
+
+class NotificationsTest(unittest.TestCase):
+    def setUp(self):
+        self.db=sqlite3.connect(':memory:'); self.db.row_factory=sqlite3.Row
+        self.at=datetime(2026,10,23,12,tzinfo=timezone.utc)
+        n.register(self.db,'test',at=self.at)
+        self.event={'event_id':'reset-1','type':'reset','state':'scheduled','expected_at':n.utc(self.at+timedelta(hours=1)),
+                    'published_at':n.utc(self.at+timedelta(seconds=1)),'time_kind':'deadline',
+                    'evidence':[{'text':'A reset is coming','url':'https://x.com/thsottiaux/status/1'}]}
+
+    def tearDown(self):
+        self.db.close()
+
+    def snapshot(self, event=None, stale=False):
+        e=event or self.event
+        upcoming=dict(e,target_at=e['expected_at']) if e['state']=='scheduled' else None
+        return {'events':[e],'summary':{'stale':stale,'upcoming':upcoming}}
+
+    def jobs(self):
+        return [dict(r) for r in self.db.execute('SELECT * FROM notification_jobs')]
+
+    def test_new_event_and_repeat_are_idempotent(self):
+        n.plan(self.db,self.snapshot(),self.at+timedelta(seconds=2))
+        n.plan(self.db,self.snapshot(),self.at+timedelta(seconds=3))
+        self.assertEqual(sorted(j['kind'] for j in self.jobs()),['forecast','reminder'])
+
+    def test_history_is_baseline_but_future_reminder_allowed(self):
+        self.event['published_at']=n.utc(self.at-timedelta(days=1))
+        n.plan(self.db,self.snapshot(),self.at)
+        self.assertEqual([j['kind'] for j in self.jobs()],['reminder'])
+
+    def test_changed_time_cancels_old_reminder(self):
+        n.plan(self.db,self.snapshot(),self.at)
+        changed=copy.deepcopy(self.event);changed['expected_at']=n.utc(self.at+timedelta(hours=2))
+        n.plan(self.db,self.snapshot(changed),self.at+timedelta(minutes=5))
+        reminders=[j for j in self.jobs() if j['kind']=='reminder']
+        self.assertEqual(sorted(j['status'] for j in reminders),['cancelled','pending'])
+        self.assertEqual(len([j for j in self.jobs() if j['kind']=='correction']),1)
+
+    def test_completion_cancels_reminder_and_sends_once(self):
+        n.plan(self.db,self.snapshot(),self.at)
+        e=dict(self.event,state='completed')
+        n.plan(self.db,self.snapshot(e),self.at+timedelta(minutes=1))
+        n.plan(self.db,self.snapshot(e),self.at+timedelta(minutes=2))
+        self.assertEqual(len([j for j in self.jobs() if j['kind']=='completed']),1)
+        self.assertEqual([j['status'] for j in self.jobs() if j['kind']=='reminder'],['cancelled'])
+
+    def test_stale_source_cancels_due_reminder(self):
+        self.event['published_at']=n.utc(self.at-timedelta(days=1))
+        n.plan(self.db,self.snapshot(),self.at)
+        job=n.claim(self.db,self.snapshot(stale=True),self.at+timedelta(minutes=46))
+        self.assertIsNone(job)
+        self.assertEqual(self.jobs()[0]['status'],'cancelled')
+
+    def test_timeout_not_retried_and_restart_unknown(self):
+        n.plan(self.db,self.snapshot(),self.at)
+        job=n.claim(self.db,self.snapshot(),self.at+timedelta(seconds=3))
+        def timeout(_): raise TimeoutError()
+        self.assertEqual(n.deliver(self.db,job,timeout),'unknown')
+        self.assertIsNone(n.claim(self.db,self.snapshot(),self.at+timedelta(minutes=1)))
+        with self.db:self.db.execute("UPDATE notification_jobs SET status='sending' WHERE kind='forecast'")
+        n.recover(self.db)
+        self.assertEqual([j['status'] for j in self.jobs() if j['kind']=='forecast'],['unknown'])
+
+    def test_success_and_failure_are_isolated(self):
+        n.plan(self.db,self.snapshot(),self.at)
+        job=n.claim(self.db,self.snapshot(),self.at+timedelta(seconds=3))
+        sent=[]
+        self.assertEqual(n.deliver(self.db,job,sent.append),'sent')
+        self.assertIn('https://x.com/',sent[0]['text'])
+        self.assertIn('截止',sent[0]['text'])
+        self.assertNotIn('@all',sent[0]['text'])
+
+    def test_no_time_means_no_reminder(self):
+        self.event['expected_at']=None
+        n.plan(self.db,self.snapshot(),self.at)
+        self.assertEqual([j['kind'] for j in self.jobs()],['forecast'])

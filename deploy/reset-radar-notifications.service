@@ -1,0 +1,23 @@
+[Unit]
+Description=Reset Radar outbound notification worker
+After=network-online.target reset-radar.service postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+WorkingDirectory=/opt/reset-radar/current
+ExecStart=/opt/reset-radar-tools/python/bin/python -u /opt/reset-radar/current/notification_worker.py
+EnvironmentFile=/etc/reset-radar/database.env
+EnvironmentFile=/etc/reset-radar/notifications.env
+Restart=on-failure
+RestartSec=15
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+MemoryMax=128M
+TasksMax=32
+
+[Install]
+WantedBy=multi-user.target

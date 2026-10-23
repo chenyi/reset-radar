@@ -15,6 +15,7 @@ from pathlib import Path
 from email.utils import format_datetime
 import collector
 import storage
+import notifications
 from analyzer import classify_candidates
 from ai_analysis import analyze_batch, revalidate_current, recover_requests, VERSION as AI_VERSION
 from billing_guard import FundingUnavailable
@@ -163,6 +164,7 @@ def analysis_loop():
         db = storage.connect(DB_FILE)
         try:
             worked = analyze_batch(db)
+            notifications.plan(db, snapshot())
         except Exception as exc:
             worked = False
             with db:
@@ -274,7 +276,8 @@ class Handler(BaseHTTPRequestHandler):
             data = snapshot()
             body = json.dumps({'ok': True, 'ready': bool(data['collection']['posts']),
                 'source_fresh': not data['summary']['stale'], 'events': len(data['events']),
-                'posts': data['collection']['posts'], 'ai_enabled': data['ai']['enabled']}).encode()
+                'posts': data['collection']['posts'], 'ai_enabled': data['ai']['enabled'],
+                'database': 'postgresql' if os.environ.get('DATABASE_URL') else 'sqlite'}).encode()
             return self.send(200, body, 'application/json; charset=utf-8')
         if path == '/api/events':
             return self.send(200, json.dumps(snapshot(), ensure_ascii=False).encode(), 'application/json; charset=utf-8')
@@ -315,6 +318,7 @@ if __name__ == '__main__':
     collector.repair_archived_previews(initial_db)
     revalidate_current(initial_db)
     recover_requests(initial_db)
+    notifications.initialize(initial_db)
     initial_db.close()
     if CACHE_FILE.exists():
         try:
