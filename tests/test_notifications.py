@@ -83,3 +83,12 @@ class NotificationsTest(unittest.TestCase):
         self.event['expected_at']=None
         n.plan(self.db,self.snapshot(),self.at)
         self.assertEqual([j['kind'] for j in self.jobs()],['forecast'])
+
+    def test_failed_sender_does_not_block_next_job(self):
+        n.plan(self.db,self.snapshot(),self.at)
+        job=n.claim(self.db,self.snapshot(),self.at+timedelta(seconds=3))
+        def fail(_): raise RuntimeError('rejected')
+        self.assertEqual(n.deliver(self.db,job,fail),'failed')
+        next_job=n.claim(self.db,self.snapshot(),self.at+timedelta(minutes=46))
+        self.assertEqual(next_job['kind'],'reminder')
+        self.assertEqual(n.deliver(self.db,next_job,lambda _:None),'sent')
