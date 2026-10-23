@@ -2,6 +2,8 @@
 const $ = (id) => document.getElementById(id);
 const labels = {scheduled:'重置预告', announced:'已公布', completed:'宣布完成', cancelled:'已取消', unconfirmed:'待确认'};
 const scopeLabels = {global:'全局', paid:'付费用户', 'plus-pro-business':'Plus / Pro / Business', unknown:'适用范围未明确'};
+const categoryLabels = {forecast:'重置预告',progress:'重置进展',completed:'重置完成',credit:'重置卡',correction:'取消／更正'};
+const original = e => e?.evidence?.find(p=>p.post_id===e.event_id.replace('tibo-',''))?.text || e?.evidence?.[0]?.text || '';
 const typeLabel = (e) => e.type === 'credit' ? '重置卡' : '额度重置';
 let model = null, filter = 'all', limit = 8, toastTimer = null, loading = false;
 const dateFormat = new Intl.DateTimeFormat('zh-CN', {timeZone:'Asia/Shanghai', month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
@@ -40,14 +42,14 @@ function renderHero() {
   const e=model.summary.latest, active=upcoming(), fresh=freshness();
   $('connection').className=`connection ${fresh?'healthy':'stale'}`;
   $('connection').innerHTML=`<i></i>${fresh?'信号同步正常':'数据待更新'}`;
-  $('record-count').textContent=model.events.length;
+  $('record-count').textContent=(model.messages||[]).length;
   $('last-reset').textContent=model.summary.latest_completed ? fmt(model.summary.latest_completed.published_at) : '暂无记录';
   $('source-state').textContent=fresh?'正常同步':'等待更新';
   $('source-checked').textContent=model.source_checked_at ? `${fmt(model.source_checked_at)} 采集 · 北京时间` : '尚未取得有效数据';
   $('sync-time').textContent=model.last_sync?`${fmt(model.last_sync)} 同步`:'等待首次同步';
   $('hero-badge').innerHTML=`<i></i>${fresh?(e?escape(statusLabel(e)):'等待公开消息'):'历史资料 · 待更新'}`;
   $('hero-title').textContent=!fresh?'信号稍作停留。':active?'新的开始，已有预告。':e?.state==='completed'?'新的开始，已宣布。':e&&isExpired(e)?'时间已到，等待确认。':'等待下一条好消息。';
-  $('hero-description').textContent=e?description(e):'正在等待可核对的公开消息。';
+  $('hero-description').textContent=e?original(e):'正在整理公开原帖；有明确重置消息后会在这里展示。';
   $('countdown-label').textContent=active?(active.time_kind==='deadline'?'距离预计截止时间':'距离公开预计时间'):'当前进展';
   $('deadline').textContent=active?`${active.time_kind==='deadline'?'预计截止':'预计时间'} ${fmt(active.target_at)} · 北京时间`:'公告发布时间与个人额度到账时间可能不同。';
   $('calendar-button').disabled=!active;
@@ -74,30 +76,40 @@ function renderCountdown() {
   $('countdown').className='countdown';
   $('countdown').innerHTML=parts.map((n,i)=>`<span>${String(n).padStart(2,'0')}<small>${['小时','分钟','秒'][i]}</small></span>`).join('<em>:</em>');
 }
+function extraContent(p) {
+  return `${p.quoted_text?`<details><summary>原帖引用的内容</summary><p class="post-text">${escape(p.quoted_text)}</p></details>`:''}${p.community_note?`<details><summary>社区注释（非作者原文）</summary><p class="post-text">${escape(p.community_note)}</p></details>`:''}`;
+}
 function renderFeed() {
   if(!model)return;
   const query=$('search').value.trim().toLowerCase();
-  const events=model.events.filter(e=>(filter==='all'||(filter==='credit'?e.type==='credit':e.state===filter&&e.type!=='credit'))&&`${title(e)} ${description(e)} ${statusLabel(e)} ${e.published_at||''} ${fmt(e.published_at)} ${e.event_id}`.toLowerCase().includes(query));
-  $('feed-count').textContent=`${events.length} 条公开消息 · 北京时间`;
-  $('feed').innerHTML=events.length ? events.slice(0,limit).map(e=>{
-    const cls=e.type==='credit'?'credit':e.state==='completed'?'completed':isExpired(e)||e.state==='cancelled'?'muted':'';
-    const link=safeLink(e.source_urls?.[0]);
-    return `<article class="event-row"><div class="event-symbol ${cls}" aria-hidden="true">${e.type==='credit'?'▦':e.state==='completed'?'✓':'↗'}</div><div class="event-main"><div class="event-meta"><span class="badge ${cls}">${escape(statusLabel(e))}</span><span>${typeLabel(e)}</span><span>·</span><span>${e.confidence==='candidate'?'待核验原帖':'Tibo 公开消息'}</span></div><button class="event-title" data-event="${escape(e.event_id)}">${escape(title(e))}</button><p class="event-description">${escape(description(e))}</p><div class="event-links"><button data-event="${escape(e.event_id)}">查看详情 ↗</button>${link?`<a href="${escape(link)}" target="_blank" rel="noopener noreferrer">核对原帖 ↗</a>`:''}</div></div><time class="event-time" datetime="${escape(e.published_at||'')}">${escape(fmt(e.published_at))}</time></article>`;
-  }).join(''):'<div class="empty-state">没有匹配的动态。试试其他分类或关键词。</div>';
-  $('load-more').classList.toggle('hidden',events.length<=limit);
-  $('load-more').textContent=`查看更多动态（还剩 ${Math.max(0,events.length-limit)} 条）↓`;
+  const messages=(model.messages||[]).filter(p=>(filter==='all'||p.category===filter)&&`${p.text} ${categoryLabels[p.category]} ${p.created_at} ${fmt(p.created_at)} ${p.post_id}`.toLowerCase().includes(query));
+  $('feed-count').textContent=`${messages.length} 条原帖 · 北京时间`;
+  $('feed').innerHTML=messages.length ? messages.slice(0,limit).map(p=>{
+    const cls=p.category==='credit'?'credit':p.category==='completed'?'completed':'';
+    const e=model.events.find(e=>e.event_id===p.event_id);
+    const time=e&&timeValue(e)&&p.category!=='completed'?`<p class="event-description">${isExpired(e)?'预计时间已过，等待后续公告。':`${e.time_kind==='deadline'?'预计截止':'预计时间'} ${fmt(timeValue(e))} · 北京时间`}</p>`:'';
+    return `<article class="event-row"><div class="event-symbol ${cls}" aria-hidden="true">${p.category==='completed'?'✓':'↗'}</div><div class="event-main"><div class="event-meta"><span class="badge ${cls}">${escape(categoryLabels[p.category])}</span><span>@thsottiaux · ${p.is_reply?'回复':'原帖'}</span><span>AI 分类</span></div><p class="post-text feed-original">${escape(p.text)}</p>${time}${extraContent(p)}<div class="event-links"><button data-post="${escape(p.post_id)}">查看关联消息与依据 ↗</button><a href="${escape(safeLink(p.url)||'#')}" target="_blank" rel="noopener noreferrer">核对 X 原帖 ↗</a></div></div><time class="event-time" datetime="${escape(p.created_at)}">${escape(fmt(p.created_at))}</time></article>`;
+  }).join(''):'<div class="empty-state">暂无匹配消息。原帖仍在采集与分类中，讨论和玩笑不进入此列表。</div>';
+  $('load-more').classList.toggle('hidden',messages.length<=limit);
+  $('load-more').textContent=`查看更多消息（还剩 ${Math.max(0,messages.length-limit)} 条）↓`;
 }
-function showDetail(id) {
+function showPost(id) {
+  const post=model?.messages?.find(p=>p.post_id===id);
+  if(!post){notify('这条原帖暂未收录');return;}
+  showDetail(post.event_id,post);
+}
+function showDetail(id, selectedPost=null) {
   const event=model?.events.find(e=>e.event_id===id);
   if(!event){notify('这条消息暂未收录');return;}
   const sources=(event.source_urls||[]).map(safeLink).filter(Boolean);
   const fields=[['消息类型',typeLabel(event)],['公开状态',statusLabel(event)],['公告发布时间',`${fmt(event.published_at)} · 北京时间`],['适用范围',scopeLabels[event.scope]||scopeLabels.unknown],['预计时间',timeValue(event)?`${fmt(timeValue(event))} · 北京时间`:'原帖未明确'],['范围核验',event.scope_verified?'来源标记为已核验':'来源未核验范围']];
-  const evidence=(event.evidence||[]).map(p=>`<section class="post-evidence"><div><a href="${escape(safeLink(p.url)||'#')}" target="_blank" rel="noopener noreferrer">@thsottiaux ${p.is_reply?'· 回复':'· 原帖'} ↗</a><time>${escape(fmt(p.created_at))}</time></div><blockquote class="post-text">${escape(p.text)}</blockquote>${p.quoted_text?`<details><summary>原帖引用的内容（其他作者）</summary><p class="post-text">${escape(p.quoted_text)}</p></details>`:''}</section>`).join('');
-  $('detail-content').innerHTML=`<span class="badge">${escape(statusLabel(event))}</span><h2 id="detail-title">${escape(title(event))}</h2><p>${escape(description(event))}</p><dl class="detail-grid">${fields.map(([k,v])=>`<div><dt>${k}</dt><dd>${escape(v)}</dd></div>`).join('')}</dl>${evidence?`<h3>原帖证据</h3>${evidence}`:''}<div class="detail-sources">${sources.map((url,i)=>`<a href="${escape(url)}" target="_blank" rel="noopener noreferrer">${i===0?'查看公开原帖':'查看补充原帖'} ↗</a>`).join('')}</div><p class="detail-note">经公开 RSS 镜像采集。${event.confidence==='candidate'?'当前仅为关键词筛选，尚未完成上下文核验。':'摘要请结合原帖核对。'}公开预告不保证个人到账；预计时间已过也不代表重置已完成。${event.original_timezone==='PST'?' 原文 PST 按 UTC−8 换算；日历日期需结合作者当地发布时间。':''}</p><button class="button" id="copy-event">复制消息链接 ↗</button>`;
+  const evidence=(event.evidence||[]).map(p=>`<section class="post-evidence"><div><a href="${escape(safeLink(p.url)||'#')}" target="_blank" rel="noopener noreferrer">@thsottiaux ${p.is_reply?'· 回复':'· 原帖'} ↗</a><time>${escape(fmt(p.created_at))}</time></div><blockquote class="post-text">${escape(p.text)}</blockquote>${extraContent(p)}</section>`).join('');
+  $('detail-content').innerHTML=`<span class="badge">${escape(statusLabel(event))}</span><h2 id="detail-title">${escape(selectedPost?categoryLabels[selectedPost.category]:typeLabel(event))} · 原帖与关联消息</h2>${selectedPost?`<p class="detail-note">分类依据：${escape(selectedPost.reason)}</p>`:''}<dl class="detail-grid">${fields.map(([k,v])=>`<div><dt>${k}</dt><dd>${escape(v)}</dd></div>`).join('')}</dl>${evidence?`<h3>原帖证据</h3>${evidence}`:''}<div class="detail-sources">${sources.map((url,i)=>`<a href="${escape(url)}" target="_blank" rel="noopener noreferrer">${i===0?'查看公开原帖':'查看补充原帖'} ↗</a>`).join('')}</div><p class="detail-note">经公开 RSS 镜像采集。分类与关联由 AI 辅助判断，请核对作者原文。公开预告不保证个人到账；预计时间已过也不代表重置已完成。${event.original_timezone==='PST'?' 原文 PST 按 UTC−8 换算；日历日期需结合作者当地发布时间。':''}</p><button class="button" id="copy-event">复制消息链接 ↗</button>`;
   $('copy-event').onclick=()=>copyText(`${location.origin}/#event/${encodeURIComponent(id)}`);
   if(!$('detail-dialog').open)$('detail-dialog').showModal();
 }
 function handleHash(){
+  if(location.hash.startsWith('#post/')){if(model)showPost(decodeURIComponent(location.hash.slice(6)));return;}
   if(location.hash.startsWith('#event/')){if(model)showDetail(decodeURIComponent(location.hash.slice(7)));return;}
   if($('detail-dialog').open)$('detail-dialog').close();
   const history=location.hash==='#history';
@@ -111,7 +123,7 @@ async function copyText(text){
 function showSubscribe(){ $('rss-url').value=location.origin+'/rss.xml';$('subscribe-dialog').showModal(); }
 async function load(){
   if(loading)return;loading=true;$('refresh').disabled=true;
-  try{const response=await fetch('/api/events',{cache:'no-store',signal:AbortSignal.timeout(15000)});if(!response.ok)throw new Error();const data=await response.json();if(!Array.isArray(data.events)||!data.summary)throw new Error();model=data;renderHero();renderFeed();renderCollection();if(!archiveLoaded)loadPosts(false);if(location.hash.startsWith('#event/'))handleHash();}
+  try{const response=await fetch('/api/events',{cache:'no-store',signal:AbortSignal.timeout(15000)});if(!response.ok)throw new Error();const data=await response.json();if(!Array.isArray(data.events)||!data.summary)throw new Error();model=data;renderHero();renderFeed();renderCollection();if(!archiveLoaded)loadPosts(false);if(location.hash.startsWith('#event/')||location.hash.startsWith('#post/'))handleHash();}
   catch{if(model){model.sync_ok=false;renderHero();}else{$('error-banner').classList.remove('hidden');$('error-banner').textContent='暂时无法连接观察站，请稍后刷新。';$('hero-title').textContent='信号暂时未连接。';$('hero-description').textContent='服务恢复后将继续展示公开动态。';$('feed').innerHTML='<div class="empty-state">暂时无法读取消息，点击右上角刷新重试。</div>'; $('connection').innerHTML='<i></i>连接暂不可用';}}
   finally{loading=false;$('refresh').disabled=false;}
 }
@@ -122,12 +134,12 @@ $('calendar-button').onclick=$('subscribe-calendar').onclick=()=>{if(upcoming())
 $('hero-detail').onclick=()=>{if(model?.summary.latest)location.hash='event/'+encodeURIComponent(model.summary.latest.event_id);};
 $('about-button').onclick=()=>$('about-dialog').showModal();
 $('copy-rss').onclick=()=>copyText($('rss-url').value);
-$('feed').onclick=(event)=>{const button=event.target.closest('[data-event]');if(button)location.hash='event/'+encodeURIComponent(button.dataset.event);};
+$('feed').onclick=(event)=>{const button=event.target.closest('[data-post]');if(button)location.hash='post/'+encodeURIComponent(button.dataset.post);};
 $('search').oninput=()=>{limit=8;renderFeed();};
 document.querySelectorAll('.tab').forEach(button=>button.onclick=()=>{filter=button.dataset.filter;limit=8;document.querySelectorAll('.tab').forEach(b=>{b.classList.toggle('active',b===button);b.setAttribute('aria-pressed',String(b===button));});renderFeed();});
 $('load-more').onclick=()=>{limit+=8;renderFeed();};
 document.querySelectorAll('dialog').forEach(dialog=>{dialog.querySelector('.close-dialog').onclick=()=>dialog.close();dialog.addEventListener('click',e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();}});});
-$('detail-dialog').addEventListener('close',()=>{if(location.hash.startsWith('#event/')){history.replaceState(null,'',location.pathname+'#history');handleHash();}});
+$('detail-dialog').addEventListener('close',()=>{if(location.hash.startsWith('#event/')||location.hash.startsWith('#post/')){history.replaceState(null,'',location.pathname+'#history');handleHash();}});
 window.addEventListener('hashchange',handleHash);
 window.addEventListener('focus',load);
 setInterval(()=>{renderCountdown();if(model&&!freshness()&&!$('error-banner').classList.contains('hidden'))return;if(model&&!freshness())renderHero();},1000);
@@ -140,7 +152,7 @@ function renderCollection(){
   const done=c.windows.filter(x=>x.status==='source_exhausted').length;
   const partial=c.windows.filter(x=>x.status==='partial').length;
   $('archive-status').textContent=`已收录 ${c.posts} 条原帖及回复 · 已遍历 ${done}/${c.windows.length} 个历史时间段${partial?` · ${partial} 段待重试`:''}`;
-  $('archive-note').textContent=`目标范围：2026-04-23 至今。${c.coverage_note} ${model.ai?.enabled?'AI 正在整理额度相关消息。':'AI 分析尚未启用；上方信号待结合上下文核验。'}`;
+  $('archive-note').textContent=`目标范围：2026-04-23 至今。${c.coverage_note} 已分析 ${model.analysis?.reviewed||0}/${model.analysis?.total||c.posts} 条。${model.ai?.enabled?'正在继续分类。':model.ai?.reason||'等待分类。'}`;
 }
 async function loadPosts(append){
   if(archiveLoading)return;archiveLoading=true;
@@ -151,7 +163,7 @@ async function loadPosts(append){
     if(!r.ok)throw new Error();const d=await r.json();
     archiveItems=append&&q===archiveQuery?archiveItems.concat(d.posts):d.posts;
     archiveQuery=q;archiveNext=d.next_offset;archiveLoaded=true;
-    $('archive-posts').innerHTML=archiveItems.map(p=>`<article class="archive-post"><div class="event-meta"><span>@thsottiaux · ${p.is_reply?'回复':'原帖'}</span><time>${escape(fmt(p.created_at))}</time></div><p class="post-text">${escape(p.text)}</p><a href="${escape(safeLink(p.url)||'#')}" target="_blank" rel="noopener noreferrer">核对 X 原帖 ↗</a></article>`).join('')||'<div class="empty-state">暂无匹配原帖；历史采集仍会继续。</div>';
+    $('archive-posts').innerHTML=archiveItems.map(p=>`<article class="archive-post"><div class="event-meta"><span>@thsottiaux · ${p.is_reply?'回复':'原帖'}</span><time>${escape(fmt(p.created_at))}</time></div><p class="post-text">${escape(p.text)}</p>${extraContent(p)}<a href="${escape(safeLink(p.url)||'#')}" target="_blank" rel="noopener noreferrer">核对 X 原帖 ↗</a></article>`).join('')||'<div class="empty-state">暂无匹配原帖；历史采集仍会继续。</div>';
     $('archive-more').classList.toggle('hidden',archiveNext===null);
   }catch{$('archive-posts').innerHTML='<div class="empty-state">暂时无法读取原帖，请刷新重试。</div>';}
   finally{archiveLoading=false;}

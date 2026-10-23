@@ -35,13 +35,13 @@ class EvidenceTests(unittest.TestCase):
     def test_lone_done_does_not_prove_completed(self):
         self.posts['1']['text'] = 'Done'
         entry = {'post_id': '1', 'relevant': True, 'anchor_id': '1', 'type': 'reset',
-                 'state': 'completed', 'title': '完成', 'summary': '完成', 'scope': 'unknown',
+                 'state': 'completed', 'category': 'completed', 'title': '完成', 'summary': '完成', 'scope': 'unknown',
                  'evidence': [{'post_id': '1', 'quote': 'Done', 'role': 'completed'}]}
         self.assertEqual(ai_analysis.validate(entry, self.posts, {'1'})['state'], 'unconfirmed')
 
     def test_fabricated_excerpt_is_rejected(self):
         entry = {'post_id': '1', 'relevant': True, 'anchor_id': '1', 'type': 'reset',
-                 'state': 'scheduled', 'evidence': [{'post_id': '1', 'quote': 'All limits reset', 'role': 'forecast'}]}
+                 'state': 'scheduled', 'category': 'forecast', 'evidence': [{'post_id': '1', 'quote': 'All limits reset', 'role': 'forecast'}]}
         with self.assertRaises(ValueError):
             ai_analysis.validate(entry, self.posts, {'1'})
 
@@ -92,6 +92,33 @@ class WorkerTests(unittest.TestCase):
             with self.assertRaises(billing_guard.FundingUnavailable):
                 ai_analysis.analyze_batch(self.db)
             request.assert_not_called()
+
+    def test_unrelated_posts_and_rule_candidates_are_not_public_messages(self):
+        with self.db:
+            self.db.execute('''INSERT INTO reset_events(event_id,type,state,title,summary,published_at,updated_at,scope,confidence)
+              VALUES ('candidate','reset','unconfirmed','request','',?,?, 'unknown','candidate')''', (storage.now(),storage.now()))
+        result = {'id':'r', 'choices':[{'message':{'content':json.dumps({'analyses':[{'post_id':'2113492502355562875','relevant':False,'reason':'普通问候'}]})}}], 'usage':{'prompt_tokens':10,'completion_tokens':10}}
+        response=MagicMock();response.__enter__.return_value.read.return_value=json.dumps(result).encode()
+        with patch.object(billing_guard,'verify'),patch('ai_analysis.urllib.request.urlopen',return_value=response):
+            ai_analysis.analyze_batch(self.db)
+        data=storage.snapshot(self.db)
+        self.assertEqual(data['messages'],[])
+        self.assertEqual(data['events'],[])
+        self.assertEqual(data['analysis']['reviewed'],1)
+
+    def test_completed_message_keeps_original_and_category(self):
+        post_id='2113492502355562875'
+        with self.db:
+            self.db.execute('UPDATE posts SET text=? WHERE post_id=?',("We've reset all limits.",post_id))
+        entry={'post_id':post_id,'relevant':True,'reason':'明确完成','category':'completed','anchor_id':post_id,'type':'reset','state':'completed','title':'AI 改写标题','summary':'AI 改写摘要','scope':'unknown','confidence':'direct','evidence':[{'post_id':post_id,'quote':"We've reset all limits.",'role':'completed'}]}
+        result={'id':'r','choices':[{'message':{'content':json.dumps({'analyses':[entry]})}}],'usage':{'prompt_tokens':10,'completion_tokens':10}}
+        response=MagicMock();response.__enter__.return_value.read.return_value=json.dumps(result).encode()
+        with patch.object(billing_guard,'verify'),patch('ai_analysis.urllib.request.urlopen',return_value=response):
+            ai_analysis.analyze_batch(self.db)
+        message=storage.snapshot(self.db)['messages'][0]
+        self.assertEqual(message['text'],"We've reset all limits.")
+        self.assertEqual(message['category'],'completed')
+        self.assertEqual(message['event_id'],'tibo-'+post_id)
 
 
 if __name__ == '__main__':

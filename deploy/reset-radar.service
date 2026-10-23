@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 DynamicUser=yes
 WorkingDirectory=/opt/reset-radar/current
-ExecStart=/usr/bin/python3 -u /opt/reset-radar/current/server.py
+ExecStart=/opt/reset-radar-tools/python/bin/python -u /opt/reset-radar/current/server.py
 Environment=HOST=0.0.0.0
 Environment=PORT=80
 Environment=PUBLIC_ORIGIN=http://47.237.1.108

@@ -52,7 +52,7 @@ def summarize(data, now=None):
     checked = timestamp(data.get('source_checked_at'))
     stale = not (data.get('sync_ok') and data.get('source_healthy') and checked is not None and 0 <= now - checked <= data.get('fresh_seconds', 1800))
     events = sorted(data.get('events', []), key=lambda e: timestamp(e.get('published_at')) or 0, reverse=True)
-    analyzed = [e for e in events if e.get('confidence') != 'candidate']
+    analyzed = [e for e in events if e.get('confidence') != 'candidate' and e.get('state') != 'unconfirmed']
     latest = analyzed[0] if analyzed else events[0] if events else None
     completed_roots = {e.get('root_id') or e['event_id'] for e in events if e.get('state') in ('completed', 'cancelled')}
     upcoming = None
@@ -188,6 +188,9 @@ def snapshot():
 
 
 def event_title(event):
+    original = next((p['text'] for p in event.get('evidence', []) if p['post_id'] == event['event_id'].removeprefix('tibo-')), None)
+    if original:
+        return STATE_LABELS.get(event.get('state'), '待确认') + ' · ' + original[:120]
     if event.get('title'):
         return STATE_LABELS.get(event.get('state'), '待确认') + ' · ' + event['title']
     kind = '重置卡' if event.get('type') == 'credit' else '额度重置'
@@ -201,16 +204,19 @@ def rss(data):
         ET.SubElement(channel, key).text = value
     if data['summary']['stale']:
         ET.SubElement(channel, 'category').text = '来源暂不可用或数据过期：条目仅供回看'
-    for event in data['events'][:30]:
+    for event in data.get('messages', data['events'])[:30]:
         item = ET.SubElement(channel, 'item')
-        ET.SubElement(item, 'title').text = event_title(event)
-        ET.SubElement(item, 'link').text = ORIGIN + '/#event/' + event['event_id']
-        ET.SubElement(item, 'guid', isPermaLink='false').text = 'reset-radar:' + event['event_id']
-        published = timestamp(event.get('published_at'))
+        message = 'post_id' in event
+        identity = event['post_id'] if message else event['event_id']
+        labels = {'forecast':'重置预告','progress':'重置进展','completed':'重置完成','credit':'重置卡','correction':'取消／更正'}
+        ET.SubElement(item, 'title').text = labels.get(event.get('category'), '') + ' · ' + event['text'][:120] if message else event_title(event)
+        ET.SubElement(item, 'link').text = ORIGIN + ('/#post/' if message else '/#event/') + identity
+        ET.SubElement(item, 'guid', isPermaLink='false').text = 'reset-radar:' + identity
+        published = timestamp(event.get('created_at') if message else event.get('published_at'))
         if published:
             ET.SubElement(item, 'pubDate').text = format_datetime(datetime.fromtimestamp(published, timezone.utc))
-        ET.SubElement(item, 'description').text = (event.get('summary', '') + ' 来源：Tibo 公开原帖，经 RSS 镜像采集。' +
-            SCOPE_LABELS.get(event.get('scope'), '适用范围未明确') + '。公告不代表个人额度到账。原帖：' + ' '.join(event.get('source_urls', [])))
+        ET.SubElement(item, 'description').text = (event.get('text', event.get('summary', '')) + ' 来源：Tibo 公开原帖，经 RSS 镜像采集。' +
+            SCOPE_LABELS.get(event.get('scope'), '适用范围未明确') + '。公告不代表个人额度到账。原帖：' + (event['url'] if message else ' '.join(event.get('source_urls', []))))
     return ET.tostring(root, encoding='utf-8', xml_declaration=True)
 
 
@@ -303,6 +309,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == '__main__':
+    initial_db = storage.connect(DB_FILE)
+    collector.separate_archived_notes(initial_db)
+    initial_db.close()
     if CACHE_FILE.exists():
         try:
             stored = json.loads(CACHE_FILE.read_text())

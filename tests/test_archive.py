@@ -83,6 +83,31 @@ class ArchiveTests(unittest.TestCase):
         self.assertEqual(storage.list_posts(self.db, "' OR 1=1 --")['total'], 0)
         self.assertEqual(storage.list_posts(self.db, '2026-10')['posts'][0]['post_id'], '2113492502355562875')
 
+    def test_community_notes_are_not_author_evidence(self):
+        raw=feed(text='Original words</p><p><b>Community note:</b> A reset has completed')
+        post=collector.parse_feed(raw,'u')[0][0]
+        self.assertEqual(post['text'],'Original words')
+        self.assertIn('A reset has completed',post['community_note'])
+        with self.db:
+            storage.save_posts(self.db,[post])
+        classify_candidates(self.db)
+        self.assertEqual(self.db.execute('SELECT count(*) FROM reset_events').fetchone()[0],0)
+
+    def test_migration_preserves_existing_posts_and_adds_classification(self):
+        path=Path(self.temp.name)/'legacy.db'
+        import sqlite3
+        legacy=sqlite3.connect(path)
+        legacy.execute('''CREATE TABLE posts(post_id TEXT PRIMARY KEY,author TEXT,text TEXT,created_at TEXT,url TEXT,
+          is_reply INTEGER,reply_to_id TEXT,conversation_id TEXT,quote_id TEXT,quoted_text TEXT,raw_payload TEXT,
+          source_url TEXT,content_hash TEXT,first_fetched_at TEXT,last_fetched_at TEXT)''')
+        legacy.execute("INSERT INTO posts(post_id,text) VALUES ('old','Keep original')")
+        legacy.commit();legacy.close()
+        migrated=storage.connect(path)
+        self.assertEqual(migrated.execute("SELECT text FROM posts WHERE post_id='old'").fetchone()[0],'Keep original')
+        self.assertEqual(migrated.execute('PRAGMA user_version').fetchone()[0],3)
+        self.assertIn('category',{x[1] for x in migrated.execute('PRAGMA table_info(post_analyses)')})
+        migrated.close()
+
 
 if __name__ == '__main__':
     unittest.main()

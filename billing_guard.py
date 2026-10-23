@@ -1,6 +1,5 @@
 import json
 import os
-import subprocess
 import time
 from datetime import datetime, timezone
 
@@ -11,14 +10,22 @@ class FundingUnavailable(RuntimeError):
     pass
 
 
-def query(action, *args):
-    command = [os.environ.get('ALIYUN_CLI', '/opt/reset-radar-tools/aliyun/aliyun'),
-               '--config-path', '/etc/reset-radar/billing-cli.json', '--profile', 'reset-radar-billing',
-               'bssopenapi', action, *args]
-    result = subprocess.run(command, capture_output=True, text=True, timeout=35)
-    if result.returncode:
-        raise FundingUnavailable('代金券查询暂不可用')
-    payload = json.loads(result.stdout)
+def query(action, **queries):
+    from alibabacloud_credentials.client import Client as Credentials
+    from alibabacloud_credentials.models import Config as CredentialsConfig
+    from alibabacloud_tea_openapi.client import Client
+    from alibabacloud_tea_openapi.models import Config, Params, OpenApiRequest
+    from alibabacloud_tea_util.models import RuntimeOptions
+
+    credential = Credentials(CredentialsConfig(type='ecs_ram_role', role_name='reset-radar-coupon-reader'))
+    client = Client(Config(credential=credential, endpoint='business.aliyuncs.com'))
+    params = Params(action=action, version='2017-12-14', protocol='HTTPS', method='POST',
+                    auth_type='AK', style='RPC', pathname='/', req_body_type='formData', body_type='json')
+    try:
+        payload = client.call_api(params, OpenApiRequest(query=queries),
+                                  RuntimeOptions(connect_timeout=5000, read_timeout=20000, autoretry=False))['body']
+    except Exception as exc:
+        raise FundingUnavailable('代金券查询暂不可用') from exc
     if payload.get('Success') is not True:
         raise FundingUnavailable('代金券查询未成功')
     return payload.get('Data', {})
@@ -46,7 +53,7 @@ def verify(db):
     if balance < 100:
         raise FundingUnavailable('可用代金券不足安全余量，AI 已停止')
     month = datetime.now(timezone.utc).strftime('%Y-%m')
-    bill = query('QueryBill', '--BillingCycle', month, '--ProductCode', 'sfm', '--PageSize', '100')
+    bill = query('QueryBill', BillingCycle=month, ProductCode='sfm', PageSize=100, IsHideZeroCharge=False)
     items = bill.get('Items', {})
     items = items.get('Item', []) if isinstance(items, dict) else items
     inference = [x for x in items if x.get('CommodityCode') == 'sfm_inference_public_cn']

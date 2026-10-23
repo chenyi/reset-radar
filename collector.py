@@ -25,20 +25,28 @@ class TextParser(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
         self.quote_depth = 0
-        self.body, self.quote = [], []
+        self.bold = False
+        self.in_note = False
+        self.body, self.quote, self.note = [], [], []
 
     def handle_starttag(self, tag, attrs):
+        if tag in ('b', 'strong'):
+            self.bold = True
         if tag == 'blockquote':
             self.quote_depth += 1
         if tag in ('p', 'br'):
-            (self.quote if self.quote_depth else self.body).append('\n')
+            (self.note if self.in_note else self.quote if self.quote_depth else self.body).append('\n')
 
     def handle_endtag(self, tag):
+        if tag in ('b', 'strong'):
+            self.bold = False
         if tag == 'blockquote':
             self.quote_depth = max(0, self.quote_depth - 1)
 
     def handle_data(self, data):
-        (self.quote if self.quote_depth else self.body).append(data)
+        if self.bold and data.strip() == 'Community note:':
+            self.in_note = True
+        (self.note if self.in_note else self.quote if self.quote_depth else self.body).append(data)
 
 
 def parse_feed(raw, source_url):
@@ -68,11 +76,24 @@ def parse_feed(raw, source_url):
                 'created_at': created, 'url': f'https://x.com/{AUTHOR}/status/{match[1]}',
                 'is_reply': int(title.startswith('R to @')), 'reply_to_id': None,
                 'conversation_id': None, 'quote_id': None, 'quoted_text': quoted or None,
+                'community_note': ''.join(parser.note).strip() or None,
                 'raw_payload': ET.tostring(item, encoding='unicode'), 'source_url': source_url,
                 'content_hash': hashlib.sha256((text + '\n' + quoted).encode()).hexdigest(),
                 'first_fetched_at': fetched, 'last_fetched_at': fetched}
         posts.append(post)
     return posts, max(2400, int(channel.findtext('ttl', '40')) * 60), len(channel.findall('item'))
+
+
+def separate_archived_notes(db):
+    rows = db.execute("SELECT * FROM posts WHERE text LIKE '%Community note:%' AND community_note IS NULL").fetchall()
+    with db:
+        for row in rows:
+            raw = ('<rss><channel><ttl>40</ttl>' + row['raw_payload'] + '</channel></rss>').encode()
+            parsed = parse_feed(raw, row['source_url'])[0]
+            for post in parsed:
+                post['first_fetched_at'] = row['first_fetched_at']
+                post['last_fetched_at'] = row['last_fetched_at']
+            save_posts(db, parsed)
 
 
 def fetch(url):
