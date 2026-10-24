@@ -59,10 +59,14 @@ bash scripts/deploy.sh
 
 `install_observability.sh` 仅在安装或修改采集器配置时运行，不必每次应用发布都重启采集器。SLS 云端配置/查询优先 `aliyun sls`；配置脚本和私人入口见 [日志与费用运维](observability.md)。不安排自动账单核验；SLS 首日实际券抵扣仍在 Issue #21 待手工确认。
 
-## 未完成 CLI 开发的保全
+## CLI 开发交接
 
-2026-10-24 交接检查时，旧本地 checkout 的 `codex/cli-v1` 有两个尚未进入 main 的提交：`0685e8c`（版本化 API、Rust CLI、Codex skill）和 `7447aef`（合并主干）。当时正再次合并主干，`deploy/Caddyfile` 存在冲突。这部分**不属于已验收发布版本**。
+本地 CLI 工作区在最终提交 `e38650c` 后没有未提交代码；该提交已经推送 GitHub 的 `codex/cli-v1`，新加坡主机也已完整拉取。此前交接备份中的 Caddy 冲突已经解决，不再需要恢复旧冲突文件。
 
-为避免本地代码删除后丢失，私有备份放在主机 `/opt/reset-radar/backups/cli-handoff-20261024/`，包含 Git bundle、冲突文件、索引及工作区/暂存区差异。接手时先检查 CLI 会话是否已完成或另有更新，再决定恢复和合并；不要直接把冲突文件覆盖到运行配置。
+- 后续 Git 和代码操作都在新加坡主机执行，不再从 Mac 开发或提交。
+- CLI 工作目录：`/root/Code/reset-radar-cli`，分支 `codex/cli-v1`；网站主干工作目录仍为 `/root/Code/reset-radar`。
+- [PR #25](https://github.com/chenyi/reset-radar/pull/25) 跟踪 CLI 合入；合入及最终发布状态以 PR 和 [CLI 验收记录](cli-acceptance-2026-10-24.md) 为准。
+- 全部源码历史另有私有备份 `/opt/reset-radar/backups/cli-acceptance-20261024/all-source-before-merge.bundle`。
+- 分发文件独立存放于 `/opt/reset-radar/downloads/cli-v<版本>/`，由网站 `/downloads/` 提供；发布应用不会覆盖该目录。GitHub Releases 存放相同文件。
 
 现场测试、备份和私人账单在 `/opt/reset-radar/backups/observability-20261024/`。业务源码及发布配置均以远程 main 为准。可观测性验收见 [验收报告](observability-acceptance-2026-10-24.md)。
