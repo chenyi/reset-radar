@@ -15,7 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 BINARY = os.environ.get('RESET_RADAR_TEST_BINARY')
 
 
-@unittest.skipUnless(BINARY and platform.system() == 'Darwin', 'requires macOS CLI and system keychain')
+@unittest.skipUnless(BINARY and platform.system() == 'Darwin' and os.environ.get('RESET_RADAR_TEST_SYSTEM_TRUST') == '1', 'requires explicit macOS CI system-keychain test opt-in')
 class SystemTrustTest(unittest.TestCase):
     def test_system_trust_without_ca_configuration_and_hostname_validation(self):
         with tempfile.TemporaryDirectory() as folder:

@@ -39,6 +39,7 @@ jobs:
         env:
           RESET_RADAR_TEST_BINARY: cli/target/aarch64-apple-darwin/release/reset-radar
           RESET_RADAR_BASELINE_BINARY: ${{ runner.temp }}/radar-baseline/reset-radar
+          RESET_RADAR_TEST_SYSTEM_TRUST: "1"
       - uses: actions/upload-artifact@v4
         with:
           name: reset-radar-aarch64-apple-darwin
