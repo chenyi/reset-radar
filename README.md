@@ -32,6 +32,14 @@
 
 本地 AI agent 接入见 [HTTP API、Rust CLI 与 Skill 设计](docs/agent-access-v1.md)。客户端与 Skill 同仓，发布独立二进制；安装说明位于 `/agent`，接口描述位于 `/openapi.json`。二进制和配套 Skill 通过域名与 GitHub Releases 分发，正式版本与验收结果见 CLI Release。
 
+安装 CLI 和 Codex Skill（一整行，适用于 bash/zsh）：
+
+```sh
+curl -fsSL https://radar.shadowearth.cn/downloads/install.sh | sh -s -- --agent codex && export PATH="$HOME/.local/bin:$PATH"
+```
+
+安装器为后续 bash/zsh 终端自动配置 PATH，修改前备份、重复安装不重复追加；末尾的 `export` 让当前终端立即生效。新开 Codex 会话即可使用 Skill。
+
 ```sh
 reset-radar status --json
 reset-radar events list --since 7d --type reset --json

@@ -46,3 +46,51 @@ if [ -n "$agent" ]; then
 else
   "$stage/reset-radar" install --download-source "$source_mode" ${json:+"$json"}
 fi
+
+# A piped installer cannot change its parent shell; persist PATH for new shells.
+configure_path_file() {
+  config="$1"
+  marker='# >>> reset-radar PATH >>>'
+  if [ -f "$config" ] && grep -Fqx "$marker" "$config"; then return; fi
+  if [ -e "$config" ] || [ -L "$config" ]; then
+    [ -f "$config" ] || { echo "Cannot update shell config: $config" >&2; return 1; }
+    backup=$(mktemp "$config.reset-radar-backup.XXXXXX")
+    if ! cp -p "$config" "$backup"; then rm -f "$backup"; return 1; fi
+    printf 'Shell config backup: %s\n' "$backup" >&2
+  else
+    mkdir -p "$(dirname "$config")"
+  fi
+  cat >> "$config" <<'PATH_CONFIG'
+
+# >>> reset-radar PATH >>>
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) export PATH="$HOME/.local/bin:$PATH" ;;
+esac
+# <<< reset-radar PATH <<<
+PATH_CONFIG
+  printf 'PATH configured: %s\n' "$config" >&2
+}
+
+path_configured=true
+shell_name=$(basename "${SHELL:-sh}")
+case "$shell_name" in
+  zsh)
+    configure_path_file "${ZDOTDIR:-$HOME}/.zprofile"
+    configure_path_file "${ZDOTDIR:-$HOME}/.zshrc"
+    ;;
+  bash)
+    if [ -f "$HOME/.bash_profile" ]; then login_config="$HOME/.bash_profile"
+    elif [ -f "$HOME/.bash_login" ]; then login_config="$HOME/.bash_login"
+    else login_config="$HOME/.profile"; fi
+    configure_path_file "$login_config"
+    configure_path_file "$HOME/.bashrc"
+    ;;
+  sh|dash) configure_path_file "$HOME/.profile" ;;
+  *) path_configured=false; printf 'Automatic PATH setup is unavailable for %s; use the full binary path below.\n' "$shell_name" >&2 ;;
+esac
+printf '\nInstallation complete.\n' >&2
+if [ "$path_configured" = true ]; then printf 'New terminals can run reset-radar directly.\n' >&2; fi
+printf 'For this existing terminal (bash/zsh/sh), run: export PATH="$HOME/.local/bin:$PATH"\n' >&2
+printf 'Use immediately: "%s/.local/bin/reset-radar" status --json\n' "$HOME" >&2
+if [ -n "$agent" ]; then printf 'Codex Skill installed. Start a new Codex chat to use it.\n' >&2; fi
