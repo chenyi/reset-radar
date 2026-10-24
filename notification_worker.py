@@ -12,6 +12,7 @@ import urllib.parse
 import urllib.request
 
 import notifications
+from observability import emit, operation
 import notification_templates
 import translations
 import server
@@ -61,10 +62,11 @@ def main():
                     job['payload']=json.dumps(payload,ensure_ascii=False)
                 senders = {'dingtalk':send_dingtalk}
                 channel = db.execute('SELECT kind FROM notification_channels WHERE channel_id=?',(job['channel_id'],)).fetchone()
-                status = notifications.deliver(db,job,senders[channel['kind']])
-                print(f'Notification {job["job_id"][:12]}: {status}',flush=True)
+                with operation('notification', job_id=job['job_id'], event_id=payload.get('event_id'), channel=channel['kind']) as result:
+                    status = notifications.deliver(db,job,senders[channel['kind']])
+                    result['status'] = status
         except Exception as exc:
-            print(f'Notification worker paused: {type(exc).__name__}',flush=True)
+            emit('notification.paused', level='ERROR', error=exc)
         finally:
             db.close()
         time.sleep(15)

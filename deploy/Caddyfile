@@ -14,5 +14,26 @@ https://radar.shadowearth.cn {
 			disable_http_challenge
 		}
 	}
-	reverse_proxy 127.0.0.1:8787
+	log {
+		output file /var/log/reset-radar/access.jsonl {
+			mode 0640
+			roll_size 20MiB
+			roll_keep 10
+			roll_keep_for 168h
+		}
+		format filter {
+			request>uri regexp `\?.*$` ""
+			request>headers delete
+			resp_headers delete
+			referer_host regexp `^(?:https?://(?:[^/@?#]+@)?([^/:?#]+)(?::[0-9]+)?(?:[/?#].*)?|.*)$` "$1"
+			user_agent regexp `^(.{0,512}).*$` "$1"
+		}
+	}
+	log_append request_id {http.request.uuid}
+	log_append referer_host {http.request.header.Referer}
+	log_append user_agent {http.request.header.User-Agent}
+	header X-Request-ID {http.request.uuid}
+	reverse_proxy 127.0.0.1:8787 {
+		header_up X-Request-ID {http.request.uuid}
+	}
 }
