@@ -1,0 +1,140 @@
+{
+  "access": {
+    "input_type": "file",
+    "input_detail": {
+      "logType": "common_reg_log",
+      "logPath": "/var/log/reset-radar",
+      "filePattern": "access.jsonl",
+      "logBeginRegex": ".*",
+      "regex": "(.*)",
+      "key": [
+        "content"
+      ],
+      "topicFormat": "none",
+      "discardUnmatch": false,
+      "preserve": true,
+      "fileEncoding": "utf8",
+      "maxDepth": 0,
+      "plugin": {
+        "processors": [
+          {
+            "type": "processor_filter_regex",
+            "detail": {
+              "Exclude": {
+                "content": "\"path\"\\s*:\\s*\"/health\"[^\\n]*\"status\"\\s*:\\s*200(?:[,}])|\"status\"\\s*:\\s*200[^\\n]*\"path\"\\s*:\\s*\"/health\""
+              }
+            }
+          },
+          {
+            "type": "processor_json",
+            "detail": {
+              "SourceKey": "content",
+              "KeepSource": false,
+              "ExpandDepth": 1,
+              "KeepSourceIfParseError": true,
+              "IgnoreFirstConnector": true,
+              "UseSourceKeyAsPrefix": false,
+              "NoKeyError": false
+            }
+          }
+        ]
+      },
+      "localStorage": true,
+      "timeFormat": "",
+      "logTimezone": ""
+    }
+  },
+  "app": {
+    "input_type": "plugin",
+    "input_detail": {
+      "plugin": {
+        "inputs": [
+          {
+            "type": "service_journal",
+            "detail": {
+              "JournalPaths": [
+                "/var/log/journal"
+              ],
+              "SeekPosition": "tail",
+              "Kernel": false,
+              "Units": [
+                "reset-radar.service",
+                "reset-radar-notifications.service",
+                "caddy.service",
+                "reset-radar-observability.service"
+              ],
+              "UseJournalEventTime": true
+            }
+          }
+        ],
+        "processors": [
+          {
+            "type": "processor_json",
+            "detail": {
+              "SourceKey": "MESSAGE",
+              "KeepSource": true,
+              "ExpandDepth": 1,
+              "KeepSourceIfParseError": true,
+              "IgnoreFirstConnector": true,
+              "UseSourceKeyAsPrefix": false,
+              "NoKeyError": false
+            }
+          },
+          {
+            "type": "processor_pick_key",
+            "detail": {
+              "Include": [
+                "MESSAGE",
+                "_SYSTEMD_UNIT",
+                "_PID",
+                "_HOSTNAME",
+                "PRIORITY",
+                "_realtime_timestamp_",
+                "ts",
+                "level",
+                "service",
+                "event",
+                "request_id",
+                "path",
+                "status",
+                "method",
+                "duration_ms",
+                "job_id",
+                "event_id",
+                "channel",
+                "kind",
+                "posts",
+                "inserted",
+                "worked",
+                "request_key",
+                "post_ids",
+                "provider_request_id",
+                "replayed",
+                "error_type",
+                "error_message",
+                "stack",
+                "stage",
+                "collection_status",
+                "delivery_status",
+                "buffer_files",
+                "buffer_bytes",
+                "oldest_buffer_age_s",
+                "checkpoint_age_s",
+                "collector_active",
+                "access_send_bytes_total",
+                "app_send_bytes_total",
+                "access_send_errors_total",
+                "app_send_errors_total"
+              ]
+            }
+          }
+        ]
+      },
+      "localStorage": true,
+      "timeFormat": "",
+      "logTimezone": "",
+      "preserve": true,
+      "discardUnmatch": false
+    }
+  }
+}

@@ -7,6 +7,8 @@ node --check public/app.js
 node tests/test_archive_ui.js
 install -d -m 750 -o caddy -g caddy /var/log/reset-radar
 caddy validate --config deploy/Caddyfile --adapter caddyfile
+# Validation can create the log as root before the unprivileged service opens it.
+chown caddy:caddy /var/log/reset-radar/access.jsonl
 if [ "$(systemctl is-enabled caddy 2>/dev/null || true)" = masked ]; then echo 'Unmask the prepared Caddy service before deploying.' >&2; exit 1; fi
 if [ -n "$(git status --porcelain)" ]; then echo 'Commit the reviewed source before deploying.' >&2; exit 1; fi
 release="/opt/reset-radar/releases/$(date -u +%Y%m%dT%H%M%SZ)-$(git rev-parse --short HEAD)"

@@ -2,6 +2,7 @@
 import hashlib
 import json
 import notification_templates
+import observability
 from datetime import datetime, timedelta, timezone
 
 SCHEMA = '''
@@ -149,9 +150,11 @@ def recover(db):
 def deliver(db, job, sender):
     try:
         sender(json.loads(job['payload']))
-    except TimeoutError:
+    except TimeoutError as exc:
+        observability.emit('notification.delivery_unknown', level='ERROR', error=exc, job_id=job['job_id'], channel=job['channel_id'])
         status, error = 'unknown', 'Request timed out; delivery requires verification'
     except Exception as exc:
+        observability.emit('notification.delivery_failed', level='ERROR', error=exc, job_id=job['job_id'], channel=job['channel_id'])
         # Do not persist exception URLs, webhook tokens, or transport headers.
         status, error = 'failed', type(exc).__name__
     else:

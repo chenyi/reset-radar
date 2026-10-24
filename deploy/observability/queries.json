@@ -1,0 +1,86 @@
+[
+  {
+    "name": "access-overview",
+    "title": "访问概览（健康成功请求除外）",
+    "store": "access",
+    "query": "request_id:* | SELECT count(*) AS requests, count_if(path='/' AND status=200) AS homepage_ok, approx_distinct(client_ip) AS distinct_ips, count_if(status>=500) AS server_errors, approx_percentile(duration*1000,0.95) AS p95_ms"
+  },
+  {
+    "name": "access-trend",
+    "title": "每小时请求与错误",
+    "store": "access",
+    "query": "request_id:* | SELECT date_trunc('hour',__time__) AS time, count(*) AS requests, count_if(status>=500) AS server_errors GROUP BY time ORDER BY time"
+  },
+  {
+    "name": "access-paths",
+    "title": "热门路径",
+    "store": "access",
+    "query": "request_id:* | SELECT path, count(*) AS requests, approx_percentile(duration*1000,0.95) AS p95_ms GROUP BY path ORDER BY requests DESC LIMIT 20"
+  },
+  {
+    "name": "access-status",
+    "title": "状态码",
+    "store": "access",
+    "query": "request_id:* | SELECT status, count(*) AS requests GROUP BY status ORDER BY requests DESC"
+  },
+  {
+    "name": "access-sources",
+    "title": "来源域名",
+    "store": "access",
+    "query": "request_id:* | SELECT coalesce(nullif(referer_host,''),'直接／未知') AS source, count(*) AS requests GROUP BY source ORDER BY requests DESC LIMIT 20"
+  },
+  {
+    "name": "access-browsers",
+    "title": "浏览器（UA 粗略识别）",
+    "store": "access",
+    "query": "request_id:* | SELECT CASE WHEN user_agent LIKE '%Edg/%' THEN 'Edge' WHEN user_agent LIKE '%Firefox/%' THEN 'Firefox' WHEN user_agent LIKE '%Chrome/%' THEN 'Chrome' WHEN user_agent LIKE '%Safari/%' THEN 'Safari' ELSE '其他／未知' END AS browser, count(*) AS requests GROUP BY browser ORDER BY requests DESC"
+  },
+  {
+    "name": "access-geo",
+    "title": "IP 粗略国家／地区",
+    "store": "access",
+    "query": "request_id:* | SELECT CASE WHEN client_ip LIKE '%:%' THEN ipv6_to_country(client_ip) ELSE ip_to_country(client_ip) END AS country, count(*) AS requests GROUP BY country ORDER BY requests DESC LIMIT 20"
+  },
+  {
+    "name": "access-errors",
+    "title": "HTTP 错误及请求 ID",
+    "store": "access",
+    "query": "status >= 400 | SELECT __time__,request_id,path,status,duration*1000 AS duration_ms ORDER BY __time__ DESC LIMIT 50"
+  },
+  {
+    "name": "app-errors",
+    "title": "任务与应用异常",
+    "store": "app",
+    "query": "level:ERROR | SELECT __time__,event,request_id,job_id,provider_request_id,error_type,error_message,stack ORDER BY __time__ DESC LIMIT 50"
+  },
+  {
+    "name": "app-tasks",
+    "title": "采集、AI、通知最近结果",
+    "store": "app",
+    "query": "event:* AND NOT event:http.request | SELECT __time__,event,job_id,collection_status,delivery_status,posts,provider_request_id ORDER BY __time__ DESC LIMIT 50"
+  },
+  {
+    "name": "access-arrival",
+    "title": "访问日志入库时间与样本大小（估算，非账单）",
+    "store": "access",
+    "query": "request_id:* | SELECT max(__time__) AS latest_event_s, max(\"__tag__:__receive_time__\") AS latest_ingestion_s, count(*) AS records, sum(length(path)+length(user_agent)+length(request_id)+length(client_ip)+128) AS estimated_payload_bytes"
+  },
+  {
+    "name": "app-arrival",
+    "title": "业务日志入库时间与样本大小（估算，非账单）",
+    "store": "app",
+    "query": "* | SELECT max(__time__) AS latest_event_s, max(\"__tag__:__receive_time__\") AS latest_ingestion_s, count(*) AS records, sum(length(MESSAGE)+128) AS estimated_payload_bytes"
+  },
+  {
+    "name": "collector-buffer",
+    "title": "采集器磁盘缓冲（不含内存队列）",
+    "store": "app",
+    "query": "event:collector.health | SELECT __time__,collector_active,buffer_files,buffer_bytes,oldest_buffer_age_s,checkpoint_age_s ORDER BY __time__ DESC LIMIT 10"
+  },
+  {
+    "name": "collector-writes",
+    "title": "采集器原始写入量（进程累计，重启归零，非账单）",
+    "store": "app",
+    "query": "event:collector.health | SELECT __time__,access_send_bytes_total,app_send_bytes_total,access_send_errors_total,app_send_errors_total ORDER BY __time__ DESC LIMIT 20"
+  }
+]

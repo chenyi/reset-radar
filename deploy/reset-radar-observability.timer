@@ -1,0 +1,10 @@
+[Unit]
+Description=Reset Radar collector snapshot every five minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=5min
+Unit=reset-radar-observability.service
+
+[Install]
+WantedBy=timers.target

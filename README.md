@@ -30,7 +30,7 @@
 
 订阅是否提醒由 RSS 阅读器或日历设置决定。未接入微信和浏览器后台推送。公开公告无法证明某个用户的个人额度到账。
 
-本地 AI agent 接入见 [HTTP API、Rust CLI 与 Skill 设计](docs/agent-access-v1.md)。客户端与 Skill 同仓，发布独立二进制；安装说明位于 `/agent`，接口描述位于 `/openapi.json`。首版候选正在验收，正式下载入口在验收完成后启用。
+本地 AI agent 接入见 [HTTP API、Rust CLI 与 Skill 设计](docs/agent-access-v1.md)。客户端与 Skill 同仓，发布独立二进制；安装说明位于 `/agent`，接口描述位于 `/openapi.json`。二进制和配套 Skill 通过域名与 GitHub Releases 分发，正式版本与验收结果见 CLI Release。
 
 ```sh
 reset-radar status --json
@@ -113,3 +113,7 @@ scripts/backup-postgres.sh
 [样式备选](https://radar.shadowearth.cn/style-options) 提供三种通知排版、三种时钟和三个机器人头像。默认采用清晰中文通知、轨道数字钟（有效预告显示预计时刻，无预告显示当前北京时间）和薄荷绿小钟机器人。通知 worker 可用 `NOTIFICATION_STYLE=clear|brief|bilingual` 切换排版；不配置时为 clear。
 
 生成素材与提示词见 [视觉素材说明](docs/visual-assets.md)。
+
+## 日志与费用
+
+私人 SLS 看板、CLI 查询、只读费用命令及回滚方式见 [日志与费用运维](docs/observability.md)。日志不提供公共接口；个人账单快照保存在仓库外。

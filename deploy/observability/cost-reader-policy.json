@@ -1,0 +1,10 @@
+{
+  "Version": "1",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["bss:QueryAccountBill"],
+      "Resource": "*"
+    }
+  ]
+}
