@@ -1,7 +1,7 @@
 name: CLI build and acceptance
 on:
   push:
-    branches: [main, codex/cli-v1]
+    branches: [main, codex/cli-v1, codex/cli-system-trust]
   pull_request:
   workflow_dispatch:
 permissions:
@@ -23,4 +23,24 @@ jobs:
         with:
           name: reset-radar-x86_64-unknown-linux-musl
           path: cli/target/x86_64-unknown-linux-musl/release/reset-radar
+          if-no-files-found: error
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --locked --release --manifest-path cli/Cargo.toml --target aarch64-apple-darwin
+      - name: Download 0.1.0 regression baseline
+        run: |
+          mkdir -p "$RUNNER_TEMP/radar-baseline"
+          curl -fsSL https://github.com/chenyi/reset-radar/releases/download/cli-v0.1.0/reset-radar-aarch64-apple-darwin.tar.gz -o "$RUNNER_TEMP/radar-baseline/archive.tar.gz"
+          tar -xzf "$RUNNER_TEMP/radar-baseline/archive.tar.gz" -C "$RUNNER_TEMP/radar-baseline"
+      - run: python3 -m unittest discover -s tests -v
+        env:
+          RESET_RADAR_TEST_BINARY: cli/target/aarch64-apple-darwin/release/reset-radar
+          RESET_RADAR_BASELINE_BINARY: ${{ runner.temp }}/radar-baseline/reset-radar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reset-radar-aarch64-apple-darwin
+          path: cli/target/aarch64-apple-darwin/release/reset-radar
           if-no-files-found: error
