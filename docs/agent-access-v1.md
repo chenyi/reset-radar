@@ -1,8 +1,8 @@
 # 重置雷达：本地 AI agent 接入第一版设计
 
-日期：2026-10-24。状态：第一版实现契约；正式部署与验收以 CLI Release 和验收记录为准。
+日期：2026-10-24。状态：第一版已实现并发布 CLI 0.1.0；验证范围见 [验收记录](cli-acceptance-2026-10-24.md)。
 
-本设计面向 Codex 等能执行本地命令、加载 Skill 的 coding agent。采用 **HTTP API + 轻量 CLI + Skill**，不提供 MCP。本文记录第一版契约，尚未正式发布的下载地址不能当作已有制品使用。
+本设计面向 Codex 等能执行本地命令、加载 Skill 的 coding agent。采用 **HTTP API + 轻量 CLI + Skill**，不提供 MCP。本文记录第一版契约；官网与 GitHub 已提供 CLI 0.1.0 制品。
 
 ## 1. 目标与范围
 

@@ -30,6 +30,14 @@ aliyun ecs DescribeInvocationResults --RegionId ap-southeast-1 \
 
 CLI 的 profile/配置文件由接手会话使用已有个人身份选择，不写死凭据。GitHub 公开仓库可以直接拉取；向 GitHub 推送前另行检查主机的写入认证，不假定复制了本机 GitHub 登录态。
 
+## 独立测试区
+
+测试区为 `/opt/reset-radar-qa/`，普通账号 `radar-qa`，HOME 为 `home/`，工具为 `tools/`，逐次验收记录为 `runs/<UTC时间>/`。使用独立源码归档、HOME 与临时 PostgreSQL 数据库，不读取生产配置、不写生产运行目录；管理员仅负责准备目录、测试库和权限。`current-run` 仅保存路径，不能用它判断测试进程仍在运行。
+
+当前本地 agent 通过 SSH 操作远端，所有代码、Git、构建和测试均在新加坡执行。主机 Codex 只用于全新 agent 的 Skill 验收。所有者本地的 `reset-radar-development` Skill 记录具体连接和测试命令。
+
+Codex 沙箱使用发行版 bubblewrap 及 `/etc/apparmor.d/bwrap-userns-restrict`，保留全局用户命名空间限制；凭据仅在私有测试 HOME 保存，不进 Git 或报告。新测试优先使用独立测试账号和唯一临时数据库，结束后清理该测试库，不使用生产 DATABASE_URL。
+
 ## 测试与发布
 
 从仓根运行测试。需明确使用隔离测试库，不能把生产 DATABASE_URL 留给测试：
