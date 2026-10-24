@@ -5,6 +5,7 @@ python3 -m unittest discover -s tests -v
 python3 -m py_compile server.py
 node --check public/app.js
 node tests/test_archive_ui.js
+install -d -m 750 -o caddy -g caddy /var/log/reset-radar
 caddy validate --config deploy/Caddyfile --adapter caddyfile
 if [ "$(systemctl is-enabled caddy 2>/dev/null || true)" = masked ]; then echo 'Unmask the prepared Caddy service before deploying.' >&2; exit 1; fi
 if [ -n "$(git status --porcelain)" ]; then echo 'Commit the reviewed source before deploying.' >&2; exit 1; fi

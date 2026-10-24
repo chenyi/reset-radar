@@ -5,6 +5,7 @@ import json
 import os
 import threading
 import time
+import uuid
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -14,6 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from email.utils import format_datetime
 import collector
+from observability import emit, operation, safe_path
 import storage
 import notifications
 import translations
@@ -127,17 +129,18 @@ def fetch_all():
         cache.clear()
         cache.update(result)
     etag = new_etag
-    print(f'sync ok: {len(records)} public events', flush=True)
+    emit('mirror.finished', events=len(records))
 
 
 def sync_loop():
     while True:
         db = storage.connect(DB_FILE)
         try:
-            collector.incremental(db)
-            classify_candidates(db)
+            with operation('rss.sync'):
+                collector.incremental(db)
+                classify_candidates(db)
         except Exception as exc:
-            print(f'RSS sync failed: {type(exc).__name__}; preserving archived posts', flush=True)
+            emit('rss.paused', level='WARNING', error=exc)
         interval = storage.get_state(db, 'source_ttl', 2400)
         db.close()
         time.sleep(interval)
@@ -153,7 +156,7 @@ def backfill_loop():
             if not remaining:
                 return
         except Exception as exc:
-            print(f'Historical collection paused: {type(exc).__name__}; checkpoint retained', flush=True)
+            emit('history.paused', level='WARNING', error=exc)
         finally:
             classify_candidates(db)
             db.close()
@@ -164,14 +167,16 @@ def analysis_loop():
     while True:
         db = storage.connect(DB_FILE)
         try:
-            worked = analyze_batch(db)
-            notifications.plan(db, snapshot())
+            with operation('analysis') as result:
+                worked = analyze_batch(db)
+                result['worked'] = worked
+                notifications.plan(db, snapshot())
         except Exception as exc:
             worked = False
             with db:
                 storage.set_state(db, 'ai_status', {'enabled': False, 'reason':
                     str(exc) if isinstance(exc, FundingUnavailable) else 'AI 分析暂不可用，原帖归档继续'})
-            print(f'AI analysis paused: {type(exc).__name__}: {str(exc)[:250]}', flush=True)
+            emit('analysis.paused', level='WARNING', error=exc)
         finally:
             db.close()
         time.sleep(0.2 if worked else 60)
@@ -182,9 +187,11 @@ def translation_loop():
         db = storage.connect(DB_FILE)
         worked = False
         try:
-            worked = translations.translate_batch(db)
+            with operation('translation') as result:
+                worked = translations.translate_batch(db)
+                result['worked'] = worked
         except Exception as exc:
-            print(f'Chinese translation paused: {type(exc).__name__}', flush=True)
+            emit('translation.paused', level='WARNING', error=exc)
         finally:
             db.close()
         time.sleep(0.2 if worked else 60)
@@ -268,6 +275,51 @@ class Handler(BaseHTTPRequestHandler):
     server_version = 'ResetRadar/1.0'
     sys_version = ''
 
+    def handle_one_request(self):
+        self.request_id = str(uuid.uuid4())
+        self._status = None
+        self._response_started = False
+        started = time.monotonic()
+        try:
+            super().handle_one_request()
+        except (BrokenPipeError, ConnectionResetError):
+            emit('http.disconnected', level='WARNING', request_id=self.request_id)
+            self.close_connection = True
+        except Exception as error:
+            emit('http.failed', level='ERROR', error=error, request_id=self.request_id,
+                 path=safe_path(getattr(self, 'path', '')))
+            self.close_connection = True
+            if not self._response_started:
+                try:
+                    self.send_error(500)
+                except OSError:
+                    pass
+        finally:
+            path = safe_path(getattr(self, 'path', ''))
+            if self._status is not None and not (path == '/health' and self._status == 200):
+                emit('http.request', level='ERROR' if self._status >= 500 else 'INFO',
+                     request_id=self.request_id, path=path, status=self._status,
+                     method=getattr(self, 'command', None),
+                     duration_ms=round((time.monotonic() - started) * 1000, 3))
+
+    def parse_request(self):
+        valid = super().parse_request()
+        if valid:
+            try:
+                self.request_id = str(uuid.UUID(self.headers.get('X-Request-ID', '')))
+            except ValueError:
+                pass
+        return valid
+
+    def send_response(self, code, message=None):
+        self._status = int(code)
+        super().send_response(code, message)
+
+    def end_headers(self):
+        self.send_header('X-Request-ID', self.request_id)
+        self._response_started = True
+        super().end_headers()
+
     def do_HEAD(self):
         self.do_GET()
 
@@ -327,8 +379,8 @@ class Handler(BaseHTTPRequestHandler):
         return self.send(404, b'Not found', 'text/plain; charset=utf-8')
 
     def log_message(self, fmt, *args):
-        if urllib.parse.urlsplit(self.path).path != '/health':
-            print(f'http {self.command} {urllib.parse.urlsplit(self.path).path} {args[1] if len(args)>1 else ""}', flush=True)
+        # BaseHTTPRequestHandler may log before path/headers exist and includes raw URLs.
+        pass
 
 
 if __name__ == '__main__':
@@ -353,5 +405,5 @@ if __name__ == '__main__':
     threading.Thread(target=translation_loop, daemon=True).start()
     server = ThreadingHTTPServer((os.environ.get('HOST', '127.0.0.1'), int(os.environ.get('PORT', '8787'))), Handler)
     server.timeout = 15
-    print('Reset Radar is listening', flush=True)
+    emit('server.started', host=os.environ.get('HOST', '127.0.0.1'), port=int(os.environ.get('PORT', '8787')))
     server.serve_forever()

@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import billing_guard
+from observability import emit
 from storage import get_state, now, set_state
 
 MODEL = 'qwen3.7-flash-2026-07-15'
@@ -385,6 +386,7 @@ def analyze_batch(db):
     if existing:
         result = json.loads(existing['response_json'])
     else:
+        emit('ai.request.started', stage='analysis', request_key=key, post_ids=[p['post_id'] for p in targets])
         try:
             with urllib.request.urlopen(request, timeout=60) as response:
                 result = json.loads(response.read(1_000_001))
@@ -399,6 +401,7 @@ def analyze_batch(db):
             with db:
                 db.execute("UPDATE ai_requests SET status='interrupted' WHERE request_key=?",(key,))
             raise
+    emit('ai.request.received', stage='analysis', request_key=key, provider_request_id=result.get('id'), replayed=bool(existing))
     usage = result.get('usage', {})
     input_tokens, output_tokens = usage['prompt_tokens'], usage['completion_tokens']
     actual = input_tokens * 0.225 / 1_000_000 + output_tokens * 0.974 / 1_000_000
@@ -421,5 +424,5 @@ def analyze_batch(db):
             apply_result(db, entry, supplied, cursor.lastrowid)
         db.execute('UPDATE ai_requests SET status=? WHERE request_key=?', ('applied', key))
         set_state(db, 'ai_status', {'enabled': True, 'reason': '原帖分析中', 'last_success_at': now()})
-    print(f'AI analyzed {len(entries)} archived posts', flush=True)
+    emit('analysis.applied', request_key=key, posts=len(entries))
     return True
