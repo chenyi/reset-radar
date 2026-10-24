@@ -30,6 +30,19 @@
 
 订阅是否提醒由 RSS 阅读器或日历设置决定。未接入微信和浏览器后台推送。公开公告无法证明某个用户的个人额度到账。
 
+本地 AI agent 接入见 [HTTP API、Rust CLI 与 Skill 设计](docs/agent-access-v1.md)。客户端与 Skill 同仓，发布独立二进制；安装说明位于 `/agent`，接口描述位于 `/openapi.json`。首版候选正在验收，正式下载入口在验收完成后启用。
+
+```sh
+reset-radar status --json
+reset-radar events list --since 7d --type reset --json
+reset-radar events get <event-id> --json
+reset-radar update --check --json
+reset-radar update
+reset-radar skill status --json
+```
+
+新接口为 `/api/v1/status`、`/api/v1/events`、`/api/v1/events/{id}`。只读查询包含来源新鲜度和原帖依据，不调用模型。完成公告时间与实际发生时间分开；来源过期不能当作没有消息，截止时间经过不能当作完成。CLI 支持 macOS ARM64 和 Linux x86_64，无需安装语言运行时。
+
 ## 验证与运行
 
 ```sh

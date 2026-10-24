@@ -14,5 +14,12 @@ https://radar.shadowearth.cn {
 			disable_http_challenge
 		}
 	}
-	reverse_proxy 127.0.0.1:8787
+	handle_path /downloads/* {
+		root * /opt/reset-radar/downloads
+		header Cache-Control "no-cache"
+		file_server
+	}
+	handle {
+		reverse_proxy 127.0.0.1:8787
+	}
 }

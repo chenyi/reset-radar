@@ -17,6 +17,7 @@ import collector
 import storage
 import notifications
 import translations
+import agent_api
 from analyzer import classify_candidates
 from ai_analysis import analyze_batch, revalidate_current, recover_requests, VERSION as AI_VERSION
 from billing_guard import FundingUnavailable
@@ -34,6 +35,7 @@ SCOPE_LABELS = {'global': '全局', 'paid': '付费用户', 'plus-pro-business':
 lock = threading.Lock()
 cache = {'events': [], 'source_healthy': False, 'source_checked_at': None, 'last_sync': None, 'sync_ok': False}
 etag = None
+agent_gateway = agent_api.Gateway()
 
 
 def timestamp(value):
@@ -190,10 +192,13 @@ def translation_loop():
         time.sleep(0.2 if worked else 60)
 
 
-def snapshot():
+def snapshot(for_agent=False):
     db = storage.connect(DB_FILE)
     try:
         result = storage.snapshot(db, AI_VERSION)
+        if for_agent:
+            result['analysis_pending'] = agent_api.pending_analysis(db, AI_VERSION)
+            result['source_checked_at'] = storage.get_state(db, 'source_checked_at', result['source_checked_at'])
     finally:
         db.close()
     result['fresh_seconds'] = 5400
@@ -271,7 +276,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_HEAD(self):
         self.do_GET()
 
-    def send(self, status, body, mime, disposition=None):
+    def send(self, status, body, mime, disposition=None, retry_after=None):
         self.send_response(status)
         self.send_header('Content-Type', mime)
         self.send_header('Content-Length', str(len(body)))
@@ -279,6 +284,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Referrer-Policy', 'strict-origin-when-cross-origin')
         self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'")
         self.send_header('Cache-Control', 'no-cache')
+        if retry_after:
+            self.send_header('Retry-After', str(retry_after))
         if disposition:
             self.send_header('Content-Disposition', disposition)
         self.end_headers()
@@ -287,6 +294,21 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = urllib.parse.urlsplit(self.path).path
+        if path.startswith('/api/v1/'):
+            try:
+                query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query, keep_blank_values=True)
+                client = self.client_address[0]
+                if client in ('127.0.0.1', '::1'):
+                    client = self.headers.get('X-Forwarded-For', client).split(',')[0].strip()
+                data = agent_gateway.get(client, lambda: snapshot(for_agent=True))
+                status, body = agent_api.respond(path, query, data)
+            except agent_api.RateLimited:
+                return self.send(429, json.dumps(agent_api.failure('rate_limited', 'Too many queries; try again later')).encode(),
+                                 'application/json; charset=utf-8', retry_after=60)
+            except Exception as exc:
+                print(f'Agent API failed: {type(exc).__name__}', flush=True)
+                status, body = 503, agent_api.failure('unavailable', 'Public announcement snapshot unavailable')
+            return self.send(status, json.dumps(body, ensure_ascii=False).encode(), 'application/json; charset=utf-8')
         if path == '/health':
             data = snapshot()
             body = json.dumps({'ok': True, 'ready': bool(data['collection']['posts']),
@@ -318,6 +340,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(409, '当前没有可订阅的有效预告，请等待新公告。'.encode(), 'text/plain; charset=utf-8')
         files = {'/': ('index.html', 'text/html'), '/app.js': ('app.js', 'text/javascript'), '/style.css': ('style.css', 'text/css'), '/favicon.svg': ('favicon.svg', 'image/svg+xml')}
         files['/style-options'] = ('style-options.html','text/html')
+        files['/agent'] = ('agent.html','text/html')
+        files['/openapi.json'] = ('openapi.json','application/json')
         files['/style-options.css'] = ('style-options.css','text/css')
         for name in ('robot-mint.png','robot-orbit.png','robot-clock.png'):
             files['/assets/'+name] = ('assets/'+name,'image/png')

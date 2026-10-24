@@ -131,11 +131,16 @@ def snapshot(db, version=None):
         event = dict(row)
         evidence = [dict(x) for x in db.execute('''
           SELECT p.post_id,p.text,p.created_at,p.url,p.is_reply,p.reply_to_id,p.quote_id,
-                 p.quoted_text,p.community_note,p.source_url,e.role,e.evidence,a.engine,a.model,a.prompt_version
+                 p.quoted_text,p.community_note,p.source_url,e.role,e.evidence,a.category,a.post_id AS analyzed_post_id,a.engine,a.model,a.prompt_version
           FROM event_posts e JOIN posts p USING(post_id)
           JOIN post_analyses a USING(analysis_id) WHERE e.event_id=? ORDER BY p.created_at,a.created_at
         ''', (event['event_id'],))]
-        evidence = list({x['post_id']: x for x in evidence}.values())
+        by_post = {}
+        for post in evidence:
+            previous = by_post.get(post['post_id'])
+            if previous is None or post['analyzed_post_id'] == post['post_id'] or previous['analyzed_post_id'] != post['post_id']:
+                by_post[post['post_id']] = post
+        evidence = list(by_post.values())
         for post in evidence:
             post['text_zh'] = chinese.get(post['post_id'])
         event.update(root_id=event['event_id'], source_urls=[x['url'] for x in evidence],
