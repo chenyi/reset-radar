@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
 
+from observability import emit
 from storage import connect, get_state, now, save_posts, set_state
 from analyzer import classify_candidates
 
@@ -154,6 +155,7 @@ def collect_page(db, job):
         url = SOURCE + '/' + AUTHOR + '/with_replies/rss'
     if job['cursor']:
         url += ('&' if '?' in url else '?') + urllib.parse.urlencode({'cursor': job['cursor']})
+    emit('collection.started', job_id=job['job_id'], kind=job['kind'])
     if job['kind'] == 'incremental':
         with db:
             set_state(db, 'source_checked_at', now())
@@ -182,10 +184,11 @@ def collect_page(db, job):
                 set_state(db, 'last_sync', now())
                 set_state(db, 'sync_ok', True)
             set_state(db, 'source_ttl', ttl)
-        print(f'{job["job_id"]}: {len(posts)} posts, {inserted} new, {status}', flush=True)
+        emit('collection.finished', job_id=job['job_id'], kind=job['kind'], posts=len(posts), inserted=inserted, collection_status=status)
         classify_candidates(db)
         return status
     except Exception as exc:
+        emit('collection.failed', level='ERROR', error=exc, job_id=job['job_id'], kind=job['kind'])
         with db:
             db.execute('UPDATE collection_jobs SET status=?,error=?,updated_at=? WHERE job_id=?',
                        ('partial', type(exc).__name__, now(), job['job_id']))

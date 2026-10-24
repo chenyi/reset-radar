@@ -8,6 +8,7 @@ import urllib.request
 
 import billing_guard
 from ai_analysis import MODEL, VERSION as ANALYSIS_VERSION
+from observability import emit
 from storage import now
 
 VERSION = 'tibo-zh-v2'
@@ -80,6 +81,7 @@ def translate_batch(db, count=6):
             raise ValueError('Unexpected translation endpoint')
         request=urllib.request.Request(base+'/compatible-mode/v1/chat/completions',data=raw,
                  headers={'Authorization':'Bearer '+os.environ['DASHSCOPE_API_KEY'],'Content-Type':'application/json'})
+        emit('ai.request.started', stage='translation', request_key=key, post_ids=[p['post_id'] for p in posts])
         try:
             with urllib.request.urlopen(request,timeout=90) as response:
                 result=json.loads(response.read(1_000_001))
@@ -90,6 +92,7 @@ def translate_batch(db, count=6):
         with db:
             db.execute('UPDATE ai_requests SET status=?,actual_cny=?,input_tokens=?,output_tokens=?,provider_request_id=?,response_json=? WHERE request_key=?',
                        ('received',actual,usage['prompt_tokens'],usage['completion_tokens'],result.get('id'),json.dumps(result,ensure_ascii=False),key))
+    emit('ai.request.received', stage='translation', request_key=key, provider_request_id=result.get('id'), replayed=bool(existing))
     entries=json.loads(result['choices'][0]['message']['content'])['translations']
     expected={p['post_id']:p for p in posts}
     if len(entries)!=len(expected) or {str(e['post_id']) for e in entries}!=set(expected):
@@ -111,5 +114,5 @@ def translate_batch(db, count=6):
               VALUES (?,?,?,?,?,?,?) ON CONFLICT(post_id,input_hash,locale,prompt_version) DO NOTHING''',
               (p['post_id'],p['content_hash'],'zh-CN',MODEL,VERSION,e['text_zh'],now()))
         db.execute("UPDATE ai_requests SET status='applied' WHERE request_key=?",(key,))
-    print(f'Chinese translations saved: {len(entries)}',flush=True)
+    emit('translation.applied', request_key=key, posts=len(entries))
     return True
