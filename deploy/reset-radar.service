@@ -8,17 +8,18 @@ Type=simple
 DynamicUser=yes
 WorkingDirectory=/opt/reset-radar/current
 ExecStart=/opt/reset-radar-tools/python/bin/python -u /opt/reset-radar/current/server.py
-Environment=HOST=0.0.0.0
-Environment=PORT=80
-Environment=PUBLIC_ORIGIN=http://47.237.1.108
+# Before HTTPS cutover: HOST=0.0.0.0 PORT=80 PUBLIC_ORIGIN=http://47.237.1.108
+Environment=HOST=127.0.0.1
+Environment=PORT=8787
+Environment=PUBLIC_ORIGIN=https://radar.shadowearth.cn
 Environment=SYNC_INTERVAL=300
 EnvironmentFile=-/etc/reset-radar/ai.env
 EnvironmentFile=-/etc/reset-radar/database.env
 StateDirectory=reset-radar
 Restart=on-failure
 RestartSec=5
-AmbientCapabilities=CAP_NET_BIND_SERVICE
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+# Only Caddy binds public privileged ports.
+CapabilityBoundingSet=
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict

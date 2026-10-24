@@ -1,5 +1,6 @@
 """Readable Chinese Markdown variants for outbound channels."""
 from datetime import datetime, timedelta, timezone
+import os
 
 STYLES = ('clear','brief','bilingual')
 TITLES = {'forecast':('🟢','重置预告'), 'reminder':('⏰','临近公告时间'),
@@ -19,7 +20,7 @@ def render(message, style='clear'):
         local=datetime.fromisoformat(target.replace('Z','+00:00')).astimezone(timezone(timedelta(hours=8)))
         when=f'{local:%m月%d日 %H:%M}（北京时间）'
     url=post.get('url','https://x.com/thsottiaux')
-    origin=message.get('origin','http://47.237.1.108').rstrip('/')
+    origin=os.environ.get('PUBLIC_ORIGIN',message.get('origin','https://radar.shadowearth.cn')).rstrip('/')
     links=f'[查看原文]({url}) · [查看重置雷达]({origin}/#event/{message["event_id"]})'
     note='公开公告不保证个人额度到账，请在自己的账号核对。'
     if message['kind']=='reminder':

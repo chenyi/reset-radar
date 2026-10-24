@@ -107,3 +107,10 @@ class NotificationStylesTest(unittest.TestCase):
         del self.message['post']['text_zh']
         self.assertIn('中文译文暂不可用',render(self.message))
         self.assertNotIn('Landing tomorrow',render(self.message))
+
+    def test_configured_https_origin_overrides_a_queued_legacy_origin(self):
+        self.message['origin']='http://47.237.1.108'
+        with patch.dict(os.environ,{'PUBLIC_ORIGIN':'https://radar.shadowearth.cn'}):
+            text=render(self.message)
+        self.assertIn('https://radar.shadowearth.cn/#event/reset-1',text)
+        self.assertNotIn('http://47.237.1.108',text)
