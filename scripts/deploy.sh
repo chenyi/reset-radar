@@ -9,7 +9,8 @@ caddy validate --config deploy/Caddyfile --adapter caddyfile
 if [ "$(systemctl is-enabled caddy 2>/dev/null || true)" = masked ]; then echo 'Unmask the prepared Caddy service before deploying.' >&2; exit 1; fi
 if [ -n "$(git status --porcelain)" ]; then echo 'Commit the reviewed source before deploying.' >&2; exit 1; fi
 release="/opt/reset-radar/releases/$(date -u +%Y%m%dT%H%M%SZ)-$(git rev-parse --short HEAD)"
-mkdir -p "$release" /opt/reset-radar/backups
+mkdir -p /opt/reset-radar/backups
+install -d -m 755 "$release"
 git archive HEAD | tar -x -C "$release"
 if [ -L /opt/reset-radar/current ]; then
   previous="$(readlink -f /opt/reset-radar/current)"
