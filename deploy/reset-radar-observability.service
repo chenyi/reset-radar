@@ -1,0 +1,12 @@
+[Unit]
+Description=Reset Radar collector disk-buffer snapshot
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/reset-radar/current
+ExecStart=/opt/reset-radar-tools/python/bin/python /opt/reset-radar/current/scripts/collector_status.py
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+MemoryMax=64M

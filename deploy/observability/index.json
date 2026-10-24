@@ -1,0 +1,496 @@
+{
+  "request_id": {
+    "type": "text",
+    "doc_value": true,
+    "caseSensitive": false,
+    "token": [
+      " ",
+      ",",
+      ";",
+      "(",
+      ")",
+      "[",
+      "]",
+      "{",
+      "}",
+      "\""
+    ]
+  },
+  "path": {
+    "type": "text",
+    "doc_value": true,
+    "caseSensitive": false,
+    "token": [
+      " ",
+      ",",
+      ";",
+      "(",
+      ")",
+      "[",
+      "]",
+      "{",
+      "}",
+      "\""
+    ]
+  },
+  "method": {
+    "type": "text",
+    "doc_value": true,
+    "caseSensitive": false,
+    "token": [
+      " ",
+      ",",
+      ";",
+      "(",
+      ")",
+      "[",
+      "]",
+      "{",
+      "}",
+      "\""
+    ]
+  },
+  "client_ip": {
+    "type": "text",
+    "doc_value": true,
+    "caseSensitive": false,
+    "token": [
+      " ",
+      ",",
+      ";",
+      "(",
+      ")",
+      "[",
+      "]",
+      "{",
+      "}",
+      "\""
+    ]
+  },
+  "referer_host": {
+    "type": "text",
+    "doc_value": true,
+    "caseSensitive": false,
+    "token": [
+      " ",
+      ",",
+      ";",
+      "(",
+      ")",
+      "[",
+      "]",
+      "{",
+      "}",
+      "\""
+    ]
+  },
+  "user_agent": {
+    "type": "text",
+    "doc_value": true,
+    "caseSensitive": false,
+    "token": [
+      " ",
+      ",",
+      ";",
+      "(",
+      ")",
+      "[",
+      "]",
+      "{",
+      "}",
+      "\""
+    ]
+  },
+  "level": {
+    "type": "text",
+    "doc_value": true,
+    "caseSensitive": false,
+    "token": [
+      " ",
+      ",",
+      ";",
+      "(",
+      ")",
+      "[",
+      "]",
+      "{",
+      "}",
+      "\""
+    ]
+  },
+  "logger": {
+    "type": "text",
+    "doc_value": true,
+    "caseSensitive": false,
+    "token": [
+      " ",
+      ",",
+      ";",
+      "(",
+      ")",
+      "[",
+      "]",
+      "{",
+      "}",
+      "\""
+    ]
+  },
+  "msg": {
+    "type": "text",
+    "doc_value": true,
+    "caseSensitive": false,
+    "token": [
+      " ",
+      ",",
+      ";",
+      "(",
+      ")",
+      "[",
+      "]",
+      "{",
+      "}",
+      "\""
+    ]
+  },
+  "_SYSTEMD_UNIT": {
+    "type": "text",
+    "doc_value": true,
+    "caseSensitive": false,
+    "token": [
+      " ",
+      ",",
+      ";",
+      "(",
+      ")",
+      "[",
+      "]",
+      "{",
+      "}",
+      "\""
+    ]
+  },
+  "event": {
+    "type": "text",
+    "doc_value": true,
+    "caseSensitive": false,
+    "token": [
+      " ",
+      ",",
+      ";",
+      "(",
+      ")",
+      "[",
+      "]",
+      "{",
+      "}",
+      "\""
+    ]
+  },
+  "job_id": {
+    "type": "text",
+    "doc_value": true,
+    "caseSensitive": false,
+    "token": [
+      " ",
+      ",",
+      ";",
+      "(",
+      ")",
+      "[",
+      "]",
+      "{",
+      "}",
+      "\""
+    ]
+  },
+  "event_id": {
+    "type": "text",
+    "doc_value": true,
+    "caseSensitive": false,
+    "token": [
+      " ",
+      ",",
+      ";",
+      "(",
+      ")",
+      "[",
+      "]",
+      "{",
+      "}",
+      "\""
+    ]
+  },
+  "channel": {
+    "type": "text",
+    "doc_value": true,
+    "caseSensitive": false,
+    "token": [
+      " ",
+      ",",
+      ";",
+      "(",
+      ")",
+      "[",
+      "]",
+      "{",
+      "}",
+      "\""
+    ]
+  },
+  "request_key": {
+    "type": "text",
+    "doc_value": true,
+    "caseSensitive": false,
+    "token": [
+      " ",
+      ",",
+      ";",
+      "(",
+      ")",
+      "[",
+      "]",
+      "{",
+      "}",
+      "\""
+    ]
+  },
+  "provider_request_id": {
+    "type": "text",
+    "doc_value": true,
+    "caseSensitive": false,
+    "token": [
+      " ",
+      ",",
+      ";",
+      "(",
+      ")",
+      "[",
+      "]",
+      "{",
+      "}",
+      "\""
+    ]
+  },
+  "stage": {
+    "type": "text",
+    "doc_value": true,
+    "caseSensitive": false,
+    "token": [
+      " ",
+      ",",
+      ";",
+      "(",
+      ")",
+      "[",
+      "]",
+      "{",
+      "}",
+      "\""
+    ]
+  },
+  "kind": {
+    "type": "text",
+    "doc_value": true,
+    "caseSensitive": false,
+    "token": [
+      " ",
+      ",",
+      ";",
+      "(",
+      ")",
+      "[",
+      "]",
+      "{",
+      "}",
+      "\""
+    ]
+  },
+  "error_type": {
+    "type": "text",
+    "doc_value": true,
+    "caseSensitive": false,
+    "token": [
+      " ",
+      ",",
+      ";",
+      "(",
+      ")",
+      "[",
+      "]",
+      "{",
+      "}",
+      "\""
+    ]
+  },
+  "error_message": {
+    "type": "text",
+    "doc_value": true,
+    "caseSensitive": false,
+    "token": [
+      " ",
+      ",",
+      ";",
+      "(",
+      ")",
+      "[",
+      "]",
+      "{",
+      "}",
+      "\""
+    ]
+  },
+  "MESSAGE": {
+    "type": "text",
+    "doc_value": true,
+    "caseSensitive": false,
+    "token": [
+      " ",
+      ",",
+      ";",
+      "(",
+      ")",
+      "[",
+      "]",
+      "{",
+      "}",
+      "\""
+    ]
+  },
+  "stack": {
+    "type": "text",
+    "doc_value": true,
+    "caseSensitive": false,
+    "token": [
+      " ",
+      ",",
+      ";",
+      "(",
+      ")",
+      "[",
+      "]",
+      "{",
+      "}",
+      "\""
+    ]
+  },
+  "service": {
+    "type": "text",
+    "doc_value": true,
+    "caseSensitive": false,
+    "token": [
+      " ",
+      ",",
+      ";",
+      "(",
+      ")",
+      "[",
+      "]",
+      "{",
+      "}",
+      "\""
+    ]
+  },
+  "post_ids": {
+    "type": "text",
+    "doc_value": true,
+    "caseSensitive": false,
+    "token": [
+      " ",
+      ",",
+      ";",
+      "(",
+      ")",
+      "[",
+      "]",
+      "{",
+      "}",
+      "\""
+    ]
+  },
+  "status": {
+    "type": "long",
+    "doc_value": true
+  },
+  "size": {
+    "type": "long",
+    "doc_value": true
+  },
+  "read_bytes": {
+    "type": "long",
+    "doc_value": true
+  },
+  "posts": {
+    "type": "long",
+    "doc_value": true
+  },
+  "inserted": {
+    "type": "long",
+    "doc_value": true
+  },
+  "duration": {
+    "type": "double",
+    "doc_value": true
+  },
+  "duration_ms": {
+    "type": "double",
+    "doc_value": true
+  },
+  "collection_status": {
+    "type": "text",
+    "doc_value": true,
+    "caseSensitive": false,
+    "token": [
+      " ",
+      ",",
+      ";",
+      "(",
+      ")",
+      "[",
+      "]",
+      "{",
+      "}",
+      "\""
+    ]
+  },
+  "delivery_status": {
+    "type": "text",
+    "doc_value": true,
+    "caseSensitive": false,
+    "token": [
+      " ",
+      ",",
+      ";",
+      "(",
+      ")",
+      "[",
+      "]",
+      "{",
+      "}",
+      "\""
+    ]
+  },
+  "buffer_files": {
+    "type": "long",
+    "doc_value": true
+  },
+  "buffer_bytes": {
+    "type": "long",
+    "doc_value": true
+  },
+  "oldest_buffer_age_s": {
+    "type": "long",
+    "doc_value": true
+  },
+  "checkpoint_age_s": {
+    "type": "long",
+    "doc_value": true
+  },
+  "collector_active": {
+    "type": "long",
+    "doc_value": true
+  },
+  "__tag__:__receive_time__": {
+    "type": "long",
+    "doc_value": true
+  }
+}
