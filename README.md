@@ -89,7 +89,7 @@ scripts/backup-postgres.sh
 
 [在线站点](https://radar.shadowearth.cn/) · [问题与需求](https://github.com/chenyi/reset-radar/issues) · [项目看板](https://github.com/users/chenyi/projects/1) · [版本发布](https://github.com/chenyi/reset-radar/releases)
 
-[2026-10-23 独立页面测试与迁移验收记录](docs/qa/2026-10-23.md)。新需求先待审批，由所有者明确批准后开发。
+[2026-10-23 独立页面测试与迁移验收记录](docs/qa/2026-10-23.md)。[2026-10-24 仅 443 HTTPS 交付报告](docs/qa/https-2026-10-24.md)。新需求先待审批，由所有者明确批准后开发。
 
 ## 中文阅读与样式
 
