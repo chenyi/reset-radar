@@ -492,5 +492,21 @@
   "__tag__:__receive_time__": {
     "type": "long",
     "doc_value": true
+  },
+  "access_send_bytes_total": {
+    "type": "long",
+    "doc_value": true
+  },
+  "app_send_bytes_total": {
+    "type": "long",
+    "doc_value": true
+  },
+  "access_send_errors_total": {
+    "type": "long",
+    "doc_value": true
+  },
+  "app_send_errors_total": {
+    "type": "long",
+    "doc_value": true
   }
 }

@@ -76,5 +76,11 @@
     "title": "采集器磁盘缓冲（不含内存队列）",
     "store": "app",
     "query": "event:collector.health | SELECT __time__,collector_active,buffer_files,buffer_bytes,oldest_buffer_age_s,checkpoint_age_s ORDER BY __time__ DESC LIMIT 10"
+  },
+  {
+    "name": "collector-writes",
+    "title": "采集器原始写入量（进程累计，重启归零，非账单）",
+    "store": "app",
+    "query": "event:collector.health | SELECT __time__,access_send_bytes_total,app_send_bytes_total,access_send_errors_total,app_send_errors_total ORDER BY __time__ DESC LIMIT 20"
   }
 ]

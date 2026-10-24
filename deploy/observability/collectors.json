@@ -120,7 +120,11 @@
                 "buffer_bytes",
                 "oldest_buffer_age_s",
                 "checkpoint_age_s",
-                "collector_active"
+                "collector_active",
+                "access_send_bytes_total",
+                "app_send_bytes_total",
+                "access_send_errors_total",
+                "app_send_errors_total"
               ]
             }
           }

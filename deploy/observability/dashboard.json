@@ -251,6 +251,25 @@
         "displayName": "采集器磁盘缓冲（不含内存队列）"
       },
       "action": {}
+    },
+    {
+      "title": "collector-writes",
+      "type": "table",
+      "search": {
+        "logstore": "app",
+        "query": "event:collector.health | SELECT __time__,access_send_bytes_total,app_send_bytes_total,access_send_errors_total,app_send_errors_total ORDER BY __time__ DESC LIMIT 20",
+        "start": "-86400s",
+        "end": "now",
+        "topic": ""
+      },
+      "display": {
+        "displayName": "采集器原始写入量（进程累计，重启归零，非账单）",
+        "height": 5,
+        "width": 12,
+        "xPos": 12,
+        "yPos": 30
+      },
+      "action": {}
     }
   ]
 }
