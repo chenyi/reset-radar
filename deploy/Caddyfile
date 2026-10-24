@@ -41,8 +41,15 @@ https://radar.shadowearth.cn {
 	log_append referer_host {http.request.header.Referer}
 	log_append user_agent {http.request.header.User-Agent}
 	header X-Request-ID {http.request.uuid}
-	reverse_proxy 127.0.0.1:8787 {
-		header_up X-Request-ID {http.request.uuid}
-		header_down -X-Request-ID
+	handle_path /downloads/* {
+		root * /opt/reset-radar/downloads
+		header Cache-Control "no-cache"
+		file_server
+	}
+	handle {
+		reverse_proxy 127.0.0.1:8787 {
+			header_up X-Request-ID {http.request.uuid}
+			header_down -X-Request-ID
+		}
 	}
 }

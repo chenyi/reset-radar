@@ -156,6 +156,9 @@ def collect_page(db, job):
     if job['cursor']:
         url += ('&' if '?' in url else '?') + urllib.parse.urlencode({'cursor': job['cursor']})
     emit('collection.started', job_id=job['job_id'], kind=job['kind'])
+    if job['kind'] == 'incremental':
+        with db:
+            set_state(db, 'source_checked_at', now())
     try:
         posts, cursor, ttl, item_count = fetch(url)
         if job['kind'] == 'backfill':
@@ -176,6 +179,8 @@ def collect_page(db, job):
               items=items+?,oldest_at=?,newest_at=?,last_success_at=?,error=NULL,updated_at=? WHERE job_id=?''',
                        (cursor, status, len(posts), oldest, newest, now(), now(), job['job_id']))
             if job['kind'] == 'incremental':
+                live_ids = set(get_state(db, 'incremental_post_ids', []))
+                set_state(db, 'incremental_post_ids', sorted(live_ids | {p['post_id'] for p in posts}))
                 set_state(db, 'last_sync', now())
                 set_state(db, 'sync_ok', True)
             set_state(db, 'source_ttl', ttl)

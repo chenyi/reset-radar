@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>重置雷达 · AI agent 接入</title>
+<body>
+<h1>重置雷达 · AI agent 接入</h1>
+<p>本地 coding agent 使用独立 Rust CLI 和 Codex Skill 查询公开重置预告、完成公告与原帖。支持 macOS ARM64、Linux x86_64，无需安装 Python、Rust 或 Node.js。</p>
+<h2>安装 CLI 和 Codex Skill</h2>
+<p>让你的 agent 阅读本页并完成安装与验证，或在终端执行：</p>
+<pre><code>curl -fsSL https://radar.shadowearth.cn/downloads/install.sh -o /tmp/reset-radar-install.sh
+sh /tmp/reset-radar-install.sh --agent codex
+$HOME/.local/bin/reset-radar --version
+$HOME/.local/bin/reset-radar status --json
+$HOME/.local/bin/reset-radar skill status --json</code></pre>
+<p>CLI 位于 <code>$HOME/.local/bin/reset-radar</code>，Skill 位于 <code>$HOME/.agents/skills/reset-radar</code>。PATH 未包含 CLI 目录时，使用上述绝对路径或将该目录加入 PATH。用新的 Codex 会话验证 Skill 发现。</p>
+<h2>查询</h2>
+<pre><code>reset-radar status
+reset-radar status --json
+reset-radar events list --since 7d --type reset --json
+reset-radar events get &lt;event-id&gt; --json</code></pre>
+<p>可以问：“现在有没有新的重置预告？”“最近一次重置是什么时候宣布完成的？”“这次预告有没有改期，依据是什么？”</p>
+<p>完成公告时间与实际发生时间分别展示。来源过期或分析尚未跟上时明确说明未知；截止时间经过不表示完成。公开消息无法证明你的个人额度到账。</p>
+<h2>更新与 Skill 管理</h2>
+<pre><code>reset-radar update --check --json
+reset-radar update
+reset-radar update --version 0.1.0
+reset-radar skill install --agent codex
+reset-radar skill status --json
+reset-radar skill update
+reset-radar skill remove</code></pre>
+<p><code>update</code> 同步升级 CLI 和已经由它安装的 Skill，没有 Skill 时不会自动新增。指定旧版本可回退。<code>skill update</code> 同步当前 CLI 配套版本；升级整套工具用 <code>update</code>。本地修改或同名文件冲突时停止覆盖。</p>
+<h2>下载来源与 API</h2>
+<p>域名和 <a href="https://github.com/chenyi/reset-radar/releases">GitHub Releases</a> 托管同一批文件，按 SHA-256 校验。可使用 <code>--download-source site</code>、<code>github</code> 或默认 <code>auto</code>。CLI 标签为 <code>cli-v*</code>，与网站发布版本分别管理。</p>
+<p>固定版本下载目录为 <code>https://radar.shadowearth.cn/downloads/cli-v&lt;版本&gt;/</code>，包含 <code>install.sh</code>、平台归档、<code>release-manifest.json</code>、<code>reset-radar-skill.tar.gz</code> 和 <code>SHA256SUMS</code>。固定版本安装器默认安装该版本，支持 <code>--version 版本</code> 显式选择。</p>
+<p>CLI 提供三个只读查询：<code>/api/v1/status</code>、<code>/api/v1/events</code>、<code>/api/v1/events/{id}</code>。<a href="/openapi.json">OpenAPI</a> · <a href="https://github.com/chenyi/reset-radar">源码与说明</a> · <a href="/">返回首页</a></p>
+</body></html>

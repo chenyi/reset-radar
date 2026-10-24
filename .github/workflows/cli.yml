@@ -1,0 +1,26 @@
+name: CLI build and acceptance
+on:
+  push:
+    branches: [main, codex/cli-v1]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+      - run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - run: cargo build --locked --release --manifest-path cli/Cargo.toml --target x86_64-unknown-linux-musl
+      - run: python3 -m unittest discover -s tests -v
+        env:
+          RESET_RADAR_TEST_BINARY: cli/target/x86_64-unknown-linux-musl/release/reset-radar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reset-radar-x86_64-unknown-linux-musl
+          path: cli/target/x86_64-unknown-linux-musl/release/reset-radar
+          if-no-files-found: error
