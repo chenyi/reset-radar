@@ -6,12 +6,13 @@
 <p>本地 coding agent 使用独立 Rust CLI 和 Codex Skill 查询公开重置预告、完成公告与原帖。支持 macOS ARM64、Linux x86_64，无需安装 Python、Rust 或 Node.js。</p>
 <h2>安装 CLI 和 Codex Skill</h2>
 <p>让你的 agent 阅读本页并完成安装与验证，或在终端执行：</p>
-<pre><code>curl -fsSL https://radar.shadowearth.cn/downloads/install.sh -o /tmp/reset-radar-install.sh
-sh /tmp/reset-radar-install.sh --agent codex
-$HOME/.local/bin/reset-radar --version
-$HOME/.local/bin/reset-radar status --json
-$HOME/.local/bin/reset-radar skill status --json</code></pre>
-<p>CLI 位于 <code>$HOME/.local/bin/reset-radar</code>，Skill 位于 <code>$HOME/.agents/skills/reset-radar</code>。PATH 未包含 CLI 目录时，使用上述绝对路径或将该目录加入 PATH。用新的 Codex 会话验证 Skill 发现。</p>
+<pre><code>curl -fsSL https://radar.shadowearth.cn/downloads/install.sh | sh -s -- --agent codex &amp;&amp; export PATH="$HOME/.local/bin:$PATH"</code></pre>
+<p>这一整行会安装 CLI 和 Codex Skill，并让当前终端立即可用。安装器自动为 bash、zsh 配置后续终端的 PATH，修改前备份已有配置，重复安装不会重复追加；zsh 遵循 ZDOTDIR，bash 遵循现有登录配置文件的优先级。其他 shell 会给出提示，不修改其配置。</p>
+<pre><code>reset-radar --version
+reset-radar status --json
+reset-radar skill status --json</code></pre>
+<p>CLI 位于 <code>$HOME/.local/bin/reset-radar</code>，Skill 位于 <code>$HOME/.agents/skills/reset-radar</code>。用新的 Codex 会话说：“用重置雷达看看最近有没有重置预告。”</p>
+<p>管道中的脚本无法改变父终端环境，因此安装命令末尾的 <code>export</code> 负责当前终端立即生效；只运行脚本时，新开终端也会自动生效，当前终端仍可使用 CLI 完整路径。配置备份位于原文件旁的 <code>文件名.reset-radar-backup.*</code>。</p>
 <h2>查询</h2>
 <pre><code>reset-radar status
 reset-radar status --json
