@@ -1,6 +1,6 @@
 [package]
 name = "reset-radar"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 rust-version = "1.89"
 description = "Public reset announcement queries for local AI agents"
@@ -11,13 +11,19 @@ chrono-tz = "0.10"
 clap = { version = "4.5", features = ["derive", "env"] }
 flate2 = "1"
 fs2 = "0.4"
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json"] }
 semver = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
 tar = "0.4"
 tempfile = "3"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["native-tls", "system-proxy"] }
+
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 
 [profile.release]
 opt-level = "s"

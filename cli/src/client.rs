@@ -1,5 +1,6 @@
 use reqwest::blocking::Client;
 use serde_json::{json, Value};
+use std::error::Error as StdError;
 use std::io::Read;
 use std::time::Duration;
 
@@ -44,6 +45,18 @@ pub fn check_url(url: &str) -> Result<()> {
     Ok(())
 }
 
+fn network_error(error: reqwest::Error) -> Error {
+    let error = error.without_url();
+    let mut message = error.to_string();
+    let mut cause = error.source();
+    while let Some(source) = cause {
+        message.push_str(": ");
+        message.push_str(&source.to_string());
+        cause = source.source();
+    }
+    Error::new(3, "network", message)
+}
+
 pub struct Http {
     client: Client,
 }
@@ -53,7 +66,7 @@ impl Http {
         if timeout == 0 || timeout > 300 {
             return Err(Error::new(2, "invalid_timeout", "timeout 应为 1–300 秒"));
         }
-        let client = Client::builder()
+        let builder = Client::builder()
             .timeout(Duration::from_secs(timeout))
             .connect_timeout(Duration::from_secs(timeout.min(10)))
             .user_agent(concat!("reset-radar/", env!("CARGO_PKG_VERSION")))
@@ -65,9 +78,10 @@ impl Http {
                 } else {
                     attempt.error("insecure redirect")
                 }
-            }))
-            .build()
-            .map_err(|e| Error::new(3, "network", e))?;
+            }));
+        #[cfg(target_os = "macos")]
+        let builder = builder.use_native_tls();
+        let client = builder.build().map_err(network_error)?;
         Ok(Self { client })
     }
 
@@ -77,7 +91,7 @@ impl Http {
             .client
             .get(url)
             .send()
-            .map_err(|e| Error::new(3, "network", e))?;
+            .map_err(network_error)?;
         let status = response.status();
         let mut bytes = Vec::new();
         response

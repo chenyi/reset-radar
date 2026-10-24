@@ -147,6 +147,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(self.run_cli('--api-url', self.base + '/failure', 'status', code=4)['error']['code'], 'rate_limited')
         self.run_cli('--api-url', self.base + '/slow', '--timeout', '1', 'status', code=3)
         self.run_cli('--api-url', 'http://example.com', 'status', code=2)
+        body = self.run_cli('--api-url', self.base.replace('http:', 'https:') + '/?token=acceptance-secret', 'status', code=3)
+        self.assertNotIn('acceptance-secret', json.dumps(body))
+        self.assertIn(':', body['error']['message'])
 
     def test_install_idempotence_and_skill_removal_preserves_other_skill(self):
         self.install(); before = self.current()
