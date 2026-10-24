@@ -3,49 +3,49 @@
     "name": "access-overview",
     "title": "访问概览（健康成功请求除外）",
     "store": "access",
-    "query": "request_id:* | SELECT count(*) AS requests, count_if(path='/' AND status=200) AS homepage_ok, approx_distinct(client_ip) AS distinct_ips, count_if(status>=500) AS server_errors, approx_percentile(duration*1000,0.95) AS p95_ms"
+    "query": "request_id:* | SELECT count(*) AS requests, count_if(path='/' AND status=200) AS homepage_ok, approx_distinct(client_ip) AS distinct_ips, count_if(status>=500) AS server_errors, approx_percentile(duration*1000,0.95) AS p95_ms FROM (SELECT request_id,min(__time__) AS __time__,max(path) AS path,max(method) AS method,max(status) AS status,max(duration) AS duration,max(client_ip) AS client_ip,max(referer_host) AS referer_host,max(user_agent) AS user_agent FROM access GROUP BY request_id)"
   },
   {
     "name": "access-trend",
     "title": "每小时请求与错误",
     "store": "access",
-    "query": "request_id:* | SELECT date_trunc('hour',__time__) AS time, count(*) AS requests, count_if(status>=500) AS server_errors GROUP BY time ORDER BY time"
+    "query": "request_id:* | SELECT date_trunc('hour',__time__) AS time, count(*) AS requests, count_if(status>=500) AS server_errors FROM (SELECT request_id,min(__time__) AS __time__,max(path) AS path,max(method) AS method,max(status) AS status,max(duration) AS duration,max(client_ip) AS client_ip,max(referer_host) AS referer_host,max(user_agent) AS user_agent FROM access GROUP BY request_id) GROUP BY time ORDER BY time"
   },
   {
     "name": "access-paths",
     "title": "热门路径",
     "store": "access",
-    "query": "request_id:* | SELECT path, count(*) AS requests, approx_percentile(duration*1000,0.95) AS p95_ms GROUP BY path ORDER BY requests DESC LIMIT 20"
+    "query": "request_id:* | SELECT path, count(*) AS requests, approx_percentile(duration*1000,0.95) AS p95_ms FROM (SELECT request_id,min(__time__) AS __time__,max(path) AS path,max(method) AS method,max(status) AS status,max(duration) AS duration,max(client_ip) AS client_ip,max(referer_host) AS referer_host,max(user_agent) AS user_agent FROM access GROUP BY request_id) GROUP BY path ORDER BY requests DESC LIMIT 20"
   },
   {
     "name": "access-status",
     "title": "状态码",
     "store": "access",
-    "query": "request_id:* | SELECT status, count(*) AS requests GROUP BY status ORDER BY requests DESC"
+    "query": "request_id:* | SELECT status, count(*) AS requests FROM (SELECT request_id,min(__time__) AS __time__,max(path) AS path,max(method) AS method,max(status) AS status,max(duration) AS duration,max(client_ip) AS client_ip,max(referer_host) AS referer_host,max(user_agent) AS user_agent FROM access GROUP BY request_id) GROUP BY status ORDER BY requests DESC"
   },
   {
     "name": "access-sources",
     "title": "来源域名",
     "store": "access",
-    "query": "request_id:* | SELECT coalesce(nullif(referer_host,''),'直接／未知') AS source, count(*) AS requests GROUP BY source ORDER BY requests DESC LIMIT 20"
+    "query": "request_id:* | SELECT coalesce(nullif(referer_host,''),'直接／未知') AS source, count(*) AS requests FROM (SELECT request_id,min(__time__) AS __time__,max(path) AS path,max(method) AS method,max(status) AS status,max(duration) AS duration,max(client_ip) AS client_ip,max(referer_host) AS referer_host,max(user_agent) AS user_agent FROM access GROUP BY request_id) GROUP BY source ORDER BY requests DESC LIMIT 20"
   },
   {
     "name": "access-browsers",
     "title": "浏览器（UA 粗略识别）",
     "store": "access",
-    "query": "request_id:* | SELECT CASE WHEN user_agent LIKE '%Edg/%' THEN 'Edge' WHEN user_agent LIKE '%Firefox/%' THEN 'Firefox' WHEN user_agent LIKE '%Chrome/%' THEN 'Chrome' WHEN user_agent LIKE '%Safari/%' THEN 'Safari' ELSE '其他／未知' END AS browser, count(*) AS requests GROUP BY browser ORDER BY requests DESC"
+    "query": "request_id:* | SELECT CASE WHEN user_agent LIKE '%Edg/%' THEN 'Edge' WHEN user_agent LIKE '%Firefox/%' THEN 'Firefox' WHEN user_agent LIKE '%Chrome/%' THEN 'Chrome' WHEN user_agent LIKE '%Safari/%' THEN 'Safari' ELSE '其他／未知' END AS browser, count(*) AS requests FROM (SELECT request_id,min(__time__) AS __time__,max(path) AS path,max(method) AS method,max(status) AS status,max(duration) AS duration,max(client_ip) AS client_ip,max(referer_host) AS referer_host,max(user_agent) AS user_agent FROM access GROUP BY request_id) GROUP BY browser ORDER BY requests DESC"
   },
   {
     "name": "access-geo",
     "title": "IP 粗略国家／地区",
     "store": "access",
-    "query": "request_id:* | SELECT CASE WHEN client_ip LIKE '%:%' THEN ipv6_to_country(client_ip) ELSE ip_to_country(client_ip) END AS country, count(*) AS requests GROUP BY country ORDER BY requests DESC LIMIT 20"
+    "query": "request_id:* | SELECT CASE WHEN client_ip LIKE '%:%' THEN ipv6_to_country(client_ip) ELSE ip_to_country(client_ip) END AS country, count(*) AS requests FROM (SELECT request_id,min(__time__) AS __time__,max(path) AS path,max(method) AS method,max(status) AS status,max(duration) AS duration,max(client_ip) AS client_ip,max(referer_host) AS referer_host,max(user_agent) AS user_agent FROM access GROUP BY request_id) GROUP BY country ORDER BY requests DESC LIMIT 20"
   },
   {
     "name": "access-errors",
     "title": "HTTP 错误及请求 ID",
     "store": "access",
-    "query": "status >= 400 | SELECT __time__,request_id,path,status,duration*1000 AS duration_ms ORDER BY __time__ DESC LIMIT 50"
+    "query": "status >= 400 | SELECT __time__,request_id,path,status,duration*1000 AS duration_ms FROM (SELECT request_id,min(__time__) AS __time__,max(path) AS path,max(method) AS method,max(status) AS status,max(duration) AS duration,max(client_ip) AS client_ip,max(referer_host) AS referer_host,max(user_agent) AS user_agent FROM access GROUP BY request_id) ORDER BY __time__ DESC LIMIT 50"
   },
   {
     "name": "app-errors",
