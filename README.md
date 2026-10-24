@@ -104,3 +104,5 @@ scripts/backup-postgres.sh
 ## 日志与费用
 
 私人 SLS 看板、CLI 查询、只读费用命令及回滚方式见 [日志与费用运维](docs/observability.md)。日志不提供公共接口；个人账单快照保存在仓库外。
+
+远程主机继续开发前请阅读 [新加坡主机开发交接](docs/server-development.md)。
