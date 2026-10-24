@@ -43,5 +43,6 @@ https://radar.shadowearth.cn {
 	header X-Request-ID {http.request.uuid}
 	reverse_proxy 127.0.0.1:8787 {
 		header_up X-Request-ID {http.request.uuid}
+		header_down -X-Request-ID
 	}
 }

@@ -1,4 +1,8 @@
 import copy
+import contextlib
+import io
+import os
+from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
 import json
 import sqlite3
@@ -64,7 +68,12 @@ class NotificationsTest(unittest.TestCase):
         n.plan(self.db,self.snapshot(),self.at)
         job=n.claim(self.db,self.snapshot(),self.at+timedelta(seconds=3))
         def timeout(_): raise TimeoutError()
-        self.assertEqual(n.deliver(self.db,job,timeout),'unknown')
+        output=io.StringIO()
+        with contextlib.redirect_stdout(output):
+            self.assertEqual(n.deliver(self.db,job,timeout),'unknown')
+        record=json.loads(output.getvalue())
+        self.assertEqual(record['job_id'],job['job_id'])
+        self.assertTrue(record['stack'])
         self.assertIsNone(n.claim(self.db,self.snapshot(),self.at+timedelta(minutes=1)))
         with self.db:self.db.execute("UPDATE notification_jobs SET status='sending' WHERE kind='forecast'")
         n.recover(self.db)

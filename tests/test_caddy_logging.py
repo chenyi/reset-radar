@@ -93,6 +93,7 @@ class CaddyLoggingTest(unittest.TestCase):
                             'X-Request-ID': 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa'})
                         with urllib.request.urlopen(request, timeout=4) as response:
                             self.assertEqual(response.status, 200)
+                            self.assertEqual(len(response.headers.get_all('X-Request-ID')), 1)
                             identity = response.headers['X-Request-ID']
                             self.assertNotEqual(identity, request.headers['X-request-id'])
                         with self.assertRaises(urllib.error.HTTPError) as failure:
