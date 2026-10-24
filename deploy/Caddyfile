@@ -1,0 +1,18 @@
+{
+	admin 127.0.0.1:2019
+	auto_https disable_redirects
+	servers {
+		protocols h1 h2
+		strict_sni_host
+	}
+}
+
+https://radar.shadowearth.cn {
+	tls {
+		issuer acme {
+			dir https://acme-v02.api.letsencrypt.org/directory
+			disable_http_challenge
+		}
+	}
+	reverse_proxy 127.0.0.1:8787
+}

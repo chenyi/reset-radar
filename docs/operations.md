@@ -1,5 +1,19 @@
 # 数据迁移、通知与回滚
 
+## HTTPS 入口
+
+正式地址为 `https://radar.shadowearth.cn`。Caddy 仅监听 TCP 443，使用 Let's Encrypt ACME 的 TLS-ALPN-01 验证，HTTP challenge 与 HTTP 自动跳转均关闭；不需要 DNS API 密钥。安全组只允许业务 TCP 443，原公网 80 规则撤销。网站仅监听 `127.0.0.1:8787`，Caddy 管理接口为 `127.0.0.1:2019`；现有受限 SSH 运维规则保留。
+
+Caddy 采用官方稳定版包和 systemd，配置来自仓库 `deploy/Caddyfile`。首次安装先 mask 服务，避免默认配置占用 80；配置校验完成且安全组已切换后 unmask，再执行正常部署。部署脚本验证内部健康和可信 HTTPS 才报告成功，不会为失败恢复公网 80。
+
+证书、私钥与 ACME 账户在官方服务的 `/var/lib/caddy/.local/share/caddy` 持久目录，由 caddy 用户管理，不随应用 release 切换，不进入 Git。此目录如需备份，应保存在 root 权限受限的仓外目录，恢复时保留属主、权限和目录结构。删除该目录或反复强制签发可能触发 CA 限流。
+
+网站和通知 unit 均设置 `PUBLIC_ORIGIN=https://radar.shadowearth.cn`。通知模板优先采用运行配置，已排队的结构化任务也会使用新域名；历史已发送消息不修改，不补发测试消息。
+
+检查：`systemctl status caddy reset-radar.service reset-radar-notifications.service`；内部健康 `curl -f http://127.0.0.1:8787/health`；外部健康 `curl -f https://radar.shadowearth.cn/health`。使用 `ss -ltnp` 核对 8787/2019 只在回环地址，80 无监听，443 属于 Caddy。通过 `journalctl -u caddy` 检查证书取得和维护日志；证书实际有效期以当前签发结果为准。自动续期需要域名继续解析到此 ECS、443 可达、ACME 出站可达和持久目录可写。
+
+回滚应用时运行 `scripts/rollback.sh`，保留当前 HTTPS-only unit/Caddy/安全组，切换旧代码且使用新 unit 继续监听本机 8787。网站旧源码能通过 `HOST`、`PORT`、`PUBLIC_ORIGIN` 配置运行。不得恢复备份中 `HOST=0.0.0.0 PORT=80` 的旧 unit。若回滚到 HTTPS 改造前的通知模板，脚本会暂停发送服务，避免继续发送旧 IP 链接；通知任务保留，重新部署兼容 HTTPS 的版本后恢复发送。若 HTTPS 故障，先恢复已验证的 Caddy 配置、证书和本机后端，仍不开放 80；无法恢复时保持后端本机监听并报告失败。
+
 ## 迁移
 
 1. 使用 SQLite 在线 backup API 创建快照，保存源码 bundle 与旧服务配置。
@@ -18,7 +32,7 @@ PG 只监听回环地址。应用账户无超级用户、创建库或创建角�
 
 先停止 `reset-radar-notifications.service` 与网站，保存最新 PG dump。新版本之间可以保持 PG 数据库，切换到上一个兼容 PG 的 release。
 
-首次迁移如需回到旧 SQLite 版本，必须使用迁移前备份的旧服务 unit 与旧 release；旧库原文件仍保留。若 PG 上线后已有新记录，先把增量导回 SQLite，再恢复旧库写入，不能把迁移前 SQLite 当作最新数据直接覆盖线上。导入校验失败时不会启动 PG 版本。
+首次迁移如需回到旧 SQLite 版本，应参考迁移前备份的配置与旧 release；旧库原文件仍保留。HTTPS 上线后必须保留本机监听和 HTTPS 入口，不得整份恢复旧 unit 的公网 80 配置。若 PG 上线后已有新记录，先把增量导回 SQLite，再恢复旧库写入，不能把迁移前 SQLite 当作最新数据直接覆盖线上。导入校验失败时不会启动 PG 版本。
 
 ## 通知核查
 

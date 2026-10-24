@@ -42,7 +42,7 @@ python3 server.py
 
 ## 阿里云部署
 
-源代码位于 `/root/Code/reset-radar`。提交后运行 `scripts/deploy.sh`，会先执行测试，再生成不可变 release 并切换 `/opt/reset-radar/current`；上个 release 保留在 `previous`。服务为 `reset-radar.service`，SQLite 位于 `/var/lib/reset-radar/radar.db`。
+源代码位于 `/root/Code/reset-radar`。提交后运行 `scripts/deploy.sh`，会先执行测试，再生成不可变 release 并切换 `/opt/reset-radar/current`；上个 release 保留在 `previous`。网站服务为 `reset-radar.service`，生产数据库为仅本机访问的 PostgreSQL。Caddy 对外仅开放 TCP 443；网站后端仅监听 `127.0.0.1:8787`，关闭公网 80，不提供 HTTP 跳转。证书使用免费 Let’s Encrypt、TLS-ALPN-01 验证并自动续期。配置和回滚见 [运维说明](docs/operations.md)。
 
 首次回填在服务后台执行；来源失败时保持原帖归档可读并明确显示缺口。重启会继续未完成窗口。
 
@@ -87,7 +87,7 @@ scripts/backup-postgres.sh
 
 ## 项目跟踪
 
-[在线站点](http://47.237.1.108/) · [问题与需求](https://github.com/chenyi/reset-radar/issues) · [项目看板](https://github.com/users/chenyi/projects/1) · [版本发布](https://github.com/chenyi/reset-radar/releases)
+[在线站点](https://radar.shadowearth.cn/) · [问题与需求](https://github.com/chenyi/reset-radar/issues) · [项目看板](https://github.com/users/chenyi/projects/1) · [版本发布](https://github.com/chenyi/reset-radar/releases)
 
 [2026-10-23 独立页面测试与迁移验收记录](docs/qa/2026-10-23.md)。新需求先待审批，由所有者明确批准后开发。
 
@@ -97,6 +97,6 @@ scripts/backup-postgres.sh
 
 翻译使用同一个个人新加坡百炼模型与共享 50 元月预算，先核对代金券，再锁定预算预留，保留 usage、请求 ID 和响应；关闭 AI 时不调用翻译。页面访问只读数据库。后台只翻译公开收录消息及证据，新帖新增翻译；历史手动处理入口是 `scripts/backfill_chinese.py`。
 
-[样式备选](http://47.237.1.108/style-options) 提供三种通知排版、三种时钟和三个机器人头像。默认采用清晰中文通知、轨道数字钟（有效预告显示预计时刻，无预告显示当前北京时间）和薄荷绿小钟机器人。通知 worker 可用 `NOTIFICATION_STYLE=clear|brief|bilingual` 切换排版；不配置时为 clear。
+[样式备选](https://radar.shadowearth.cn/style-options) 提供三种通知排版、三种时钟和三个机器人头像。默认采用清晰中文通知、轨道数字钟（有效预告显示预计时刻，无预告显示当前北京时间）和薄荷绿小钟机器人。通知 worker 可用 `NOTIFICATION_STYLE=clear|brief|bilingual` 切换排版；不配置时为 clear。
 
 生成素材与提示词见 [视觉素材说明](docs/visual-assets.md)。
