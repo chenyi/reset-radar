@@ -1,6 +1,12 @@
 {
 	admin 127.0.0.1:2019
 	auto_https disable_redirects
+	log {
+		format filter {
+			request delete
+			resp_headers delete
+		}
+	}
 	servers {
 		protocols h1 h2
 		strict_sni_host
@@ -22,14 +28,16 @@ https://radar.shadowearth.cn {
 			roll_keep_for 168h
 		}
 		format filter {
-			request>uri regexp `\?.*$` ""
-			request>headers delete
+			request delete
 			resp_headers delete
 			referer_host regexp `^(?:https?://(?:[^/@?#]+@)?([^/:?#]+)(?::[0-9]+)?(?:[/?#].*)?|.*)$` "$1"
 			user_agent regexp `^(.{0,512}).*$` "$1"
 		}
 	}
 	log_append request_id {http.request.uuid}
+	log_append path {http.request.uri.path}
+	log_append method {http.request.method}
+	log_append client_ip {http.request.remote.host}
 	log_append referer_host {http.request.header.Referer}
 	log_append user_agent {http.request.header.User-Agent}
 	header X-Request-ID {http.request.uuid}

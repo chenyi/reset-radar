@@ -64,7 +64,7 @@ def main():
                 channel = db.execute('SELECT kind FROM notification_channels WHERE channel_id=?',(job['channel_id'],)).fetchone()
                 with operation('notification', job_id=job['job_id'], event_id=payload.get('event_id'), channel=channel['kind']) as result:
                     status = notifications.deliver(db,job,senders[channel['kind']])
-                    result['status'] = status
+                    result['delivery_status'] = status
         except Exception as exc:
             emit('notification.paused', level='ERROR', error=exc)
         finally:

@@ -179,7 +179,7 @@ def collect_page(db, job):
                 set_state(db, 'last_sync', now())
                 set_state(db, 'sync_ok', True)
             set_state(db, 'source_ttl', ttl)
-        emit('collection.finished', job_id=job['job_id'], kind=job['kind'], posts=len(posts), inserted=inserted, status=status)
+        emit('collection.finished', job_id=job['job_id'], kind=job['kind'], posts=len(posts), inserted=inserted, collection_status=status)
         classify_candidates(db)
         return status
     except Exception as exc:
