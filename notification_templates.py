@@ -27,7 +27,13 @@ def render(message, style='clear'):
     if message['kind']=='reminder':
         note='这是公告时间前的提醒，尚不能据此认定重置已完成。'
     elif message['kind']=='verification':
-        note='公告预计时间已过 15 分钟，尚未收录到作者的完成公告。请自行检查额度是否恢复；这不代表已确认重置完成。'
+        state = message.get('event_state')
+        if state == 'completed':
+            note='公告预计时间已过 15 分钟。作者已宣布完成，请自行检查额度是否恢复。'
+        elif state == 'cancelled':
+            note='公告原预计时间已过 15 分钟。该预告已取消，请以最新公告为准，也可自行检查当前额度。'
+        else:
+            note='公告预计时间已过 15 分钟，尚未收录到作者的完成公告。请自行检查额度是否恢复；这不代表已确认重置完成。'
     preview='**样式预览 · 不是新公告**\n\n' if message.get('preview') else ''
     if style=='brief':
         return preview+f'{icon} **{title}**\n\n{label}：{when}\n\n{chinese}\n\n{links}\n\n> {note}'

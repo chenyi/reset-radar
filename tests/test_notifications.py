@@ -133,14 +133,21 @@ class ElapsedReminderTest(unittest.TestCase):
         self.assertIsNone(n.claim(self.db,self.snapshot(),self.at+timedelta(minutes=76)))
         self.assertEqual(len([j for j in self.jobs() if j['kind']=='verification']),1)
 
-    def test_completion_cancellation_and_changed_time_retract_check(self):
+    def test_terminal_announcements_keep_check_but_time_change_reschedules(self):
         for state in ('completed','cancelled'):
             with self.subTest(state=state):
                 self.deliver_forecast()
                 e=dict(self.event,state=state)
                 n.plan(self.db,self.snapshot(e),self.at+timedelta(minutes=65))
                 check=[j for j in self.jobs() if j['kind']=='verification'][0]
-                self.assertEqual(check['status'],'cancelled')
+                self.assertEqual(check['status'],'pending')
+                terminal=n.claim(self.db,self.snapshot(e),self.at+timedelta(minutes=65))
+                n.deliver(self.db,terminal,lambda _:None)
+                job=n.claim(self.db,self.snapshot(e),self.at+timedelta(minutes=75))
+                self.assertEqual(job['kind'],'verification')
+                payload=json.loads(job['payload'])
+                self.assertEqual(payload['event_state'],state)
+                self.assertNotIn('尚未收录',payload['text'])
                 with self.db:
                     self.db.execute('DELETE FROM notification_jobs')
                     self.db.execute('DELETE FROM notification_events')
@@ -163,11 +170,21 @@ class ElapsedReminderTest(unittest.TestCase):
         job=n.claim(self.db,self.snapshot(e),at+timedelta(minutes=5))
         self.assertEqual(job['kind'],'completed')
 
-    def test_stale_or_superseded_event_cannot_send_check(self):
+    def test_stale_source_does_not_cancel_clock_based_check(self):
         self.deliver_forecast()
-        at=self.at+timedelta(minutes=75)
-        self.assertIsNone(n.claim(self.db,self.snapshot(stale=True),at))
-        self.assertEqual([j['status'] for j in self.jobs() if j['kind']=='verification'],['cancelled'])
+        job=n.claim(self.db,self.snapshot(stale=True),self.at+timedelta(minutes=75))
+        self.assertEqual(job['kind'],'verification')
+        self.assertIn('尚未收录',json.loads(job['payload'])['text'])
+
+    def test_worker_reads_completion_before_planner_catches_up(self):
+        self.deliver_forecast()
+        e=dict(self.event,state='completed')
+        job=n.claim(self.db,self.snapshot(e),self.at+timedelta(minutes=75))
+        self.assertEqual(job['kind'],'verification')
+        payload=json.loads(job['payload'])
+        self.assertEqual(payload['event_state'],'completed')
+        self.assertIn('已宣布完成',payload['text'])
+        self.assertNotIn('尚未收录',payload['text'])
 
     def test_expired_history_and_uncertain_time_do_not_generate_checks(self):
         self.event['expected_at']=n.utc(self.at-timedelta(hours=1))
