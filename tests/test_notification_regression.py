@@ -2,6 +2,11 @@
 import copy
 import json
 import sqlite3
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
+
+import storage
 import unittest
 from datetime import datetime, timezone
 
@@ -83,3 +88,50 @@ class NotificationRegressionTest(unittest.TestCase):
             self.assertEqual(db.execute("SELECT status FROM notification_jobs WHERE kind='reminder'").fetchone()[0],'cancelled')
         finally:
             db.close()
+
+
+class StoredEvidenceReplayTest(unittest.TestCase):
+    def test_revalidate_saved_analyses_repairs_same_event_without_inference(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db=storage.connect(Path(directory)/'replay.db')
+            try:
+                posts=[
+                    {'post_id':'root','text':'Day 20/ Rest and reset','created_at':'2026-10-25T03:39:31Z','is_reply':0},
+                    {'post_id':'time','text':'By midnight PST','created_at':'2026-10-25T03:40:04Z','is_reply':1},
+                    {'post_id':'done','text':'It is all propagated. Enjoy some mad codexing tomorrow. Fun week ahead too.',
+                     'created_at':'2026-10-25T06:06:16Z','is_reply':0,'quote_id':'time'},
+                ]
+                values=[dict(author='thsottiaux',url='https://x.com/thsottiaux/status/'+p['post_id'],
+                             raw_payload='<item/>',source_url='https://example.test/rss',content_hash=p['post_id'],
+                             first_fetched_at=p['created_at'],last_fetched_at=p['created_at'],**p) for p in posts]
+                with db: storage.save_posts(db,values)
+                body={'messages':[{'role':'system','content':'fixture'},
+                                  {'role':'user','content':json.dumps({'context':posts})}]}
+                root={'post_id':'root','relevant':True,'category':'forecast','type':'reset','state':'announced',
+                      'anchor_id':'root','scope':'unknown','confidence':'contextual','validation_version':5,
+                      'evidence':[{'post_id':'root','role':'forecast'}]}
+                timing=dict(root,post_id='time',category='progress',state='scheduled',expected_at=None,
+                            evidence=[{'post_id':'time','role':'update'},{'post_id':'root','role':'forecast'}],
+                            time={'phrase':'By midnight PST','date_ref_id':'time'})
+                done={'post_id':'done','relevant':False,'reason':'previous validation rejected it','validation_version':5}
+                for entry in [root,timing,done]:
+                    with db:
+                        db.execute("""INSERT INTO post_analyses
+                          (post_id,input_hash,engine,model,prompt_version,input_snapshot,result_json,created_at,relevant,category)
+                          VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                          (entry['post_id'],entry['post_id'],'qwen',a.MODEL,a.VERSION,json.dumps(body),
+                           json.dumps(entry),'2026-10-25T06:15:12Z',int(entry['relevant']),entry.get('category')))
+                with patch('ai_analysis.urllib.request.urlopen') as request:
+                    a.revalidate_current(db)
+                    a.revalidate_current(db)
+                    request.assert_not_called()
+                events=[dict(r) for r in db.execute("SELECT * FROM reset_events WHERE confidence IN ('ai-direct','ai-context')")]
+                self.assertEqual(len(events),1)
+                self.assertEqual((events[0]['event_id'],events[0]['state'],events[0]['completed_announced_at']),
+                                 ('tibo-root','completed','2026-10-25T06:06:16Z'))
+                timing=json.loads(db.execute("SELECT result_json FROM post_analyses WHERE post_id='time'").fetchone()[0])
+                self.assertEqual(timing['expected_at'],'2026-10-25T08:00:00Z')
+                self.assertEqual(db.execute("SELECT count(*) FROM ai_requests").fetchone()[0],0)
+                self.assertEqual(db.execute("SELECT relevant FROM post_analyses WHERE post_id='done'").fetchone()[0],1)
+            finally:
+                db.close()
