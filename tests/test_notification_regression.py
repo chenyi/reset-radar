@@ -34,6 +34,10 @@ class NotificationRegressionTest(unittest.TestCase):
         self.assertEqual((result['relevant'],result.get('category'),result.get('state'),result.get('anchor_id')),
                          (True,'completed','completed','root'))
         self.assertEqual({e['post_id'] for e in result['evidence']},{'root','time','done'})
+        self.posts['root']['created_at']='2026-10-20T03:39:31Z'
+        self.posts['done'].update(text='Done',quote_id='root')
+        result=a.validate({'post_id':'done','relevant':False},self.posts,{'done'})
+        self.assertEqual((result['state'],result['anchor_id']),('completed','root'))
 
     def test_unlinked_cross_author_future_and_cyclic_quotes_do_not_prove_completion(self):
         for change in ('unlinked','cross-author','future','cycle'):

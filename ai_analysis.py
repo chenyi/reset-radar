@@ -125,9 +125,7 @@ def completion_quote_chain(post, posts):
     quote_id=post.get('quote_id')
     while quote_id in posts and quote_id not in seen:
         parent=posts[quote_id]
-        age = (datetime.fromisoformat(post['created_at'].replace('Z', '+00:00'))
-               - datetime.fromisoformat(parent['created_at'].replace('Z', '+00:00'))).total_seconds()
-        if parent.get('author')!='thsottiaux' or not 0 <= age <= 3 * 86400:
+        if parent.get('author')!='thsottiaux':
             return []
         seen.add(quote_id);chain.append(quote_id)
         if re.search(r'\breset(?:s|ting)?\b',parent['text'],re.I):
