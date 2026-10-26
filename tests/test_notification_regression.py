@@ -1,6 +1,7 @@
 """Replay the October 25 public announcement chain without external calls."""
 import copy
 import json
+import os
 import sqlite3
 import tempfile
 from pathlib import Path
@@ -133,5 +134,20 @@ class StoredEvidenceReplayTest(unittest.TestCase):
                 self.assertEqual(timing['expected_at'],'2026-10-25T08:00:00Z')
                 self.assertEqual(db.execute("SELECT count(*) FROM ai_requests").fetchone()[0],0)
                 self.assertEqual(db.execute("SELECT relevant FROM post_analyses WHERE post_id='done'").fetchone()[0],1)
+                with db:
+                    db.execute('DELETE FROM event_posts')
+                    db.execute('DELETE FROM reset_events')
+                    db.execute('DELETE FROM post_analyses')
+                response={'id':'fixture-response','choices':[{'message':{'content':json.dumps({'analyses':[done,timing,root]})}}],
+                          'usage':{'prompt_tokens':100,'completion_tokens':30}}
+                from unittest.mock import MagicMock
+                reply=MagicMock();reply.__enter__.return_value.read.return_value=json.dumps(response).encode()
+                with patch.dict(os.environ,{'AI_ENABLED':'1','AI_BASE_URL':'https://ws-test.ap-southeast-1.maas.aliyuncs.com',
+                                            'DASHSCOPE_API_KEY':'test-only'}), patch('billing_guard.verify'), \
+                        patch('ai_analysis.urllib.request.urlopen',return_value=reply) as request:
+                    self.assertTrue(a.analyze_batch(db))
+                    self.assertEqual(request.call_count,1)
+                events=list(db.execute("SELECT event_id,state FROM reset_events WHERE confidence IN ('ai-direct','ai-context')"))
+                self.assertEqual([(e['event_id'],e['state']) for e in events],[('tibo-root','completed')])
             finally:
                 db.close()
