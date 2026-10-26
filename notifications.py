@@ -106,7 +106,7 @@ def plan(db, snapshot, at=None):
                     if state in ('completed','cancelled') and fresh_event and (not old or previous.get('state') != state):
                         kind = state
                     elif state in ('announced','scheduled'):
-                        if not old and fresh_event:
+                        if fresh_event and (not old or previous.get('state') == 'unconfirmed'):
                             kind = 'forecast'
                         elif changed and fresh_event and (previous.get('expected_at'),previous.get('window_end')) != (current.get('expected_at'),current.get('window_end')):
                             kind = 'correction'
