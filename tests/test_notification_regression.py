@@ -132,6 +132,7 @@ class StoredEvidenceReplayTest(unittest.TestCase):
                     request.assert_not_called()
                 events=[dict(r) for r in db.execute("SELECT * FROM reset_events WHERE confidence IN ('ai-direct','ai-context')")]
                 self.assertEqual(len(events),1)
+                self.assertEqual(events[0]['expected_at'],'2026-10-25T08:00:00Z')
                 self.assertEqual((events[0]['event_id'],events[0]['state'],events[0]['completed_announced_at']),
                                  ('tibo-root','completed','2026-10-25T06:06:16Z'))
                 timing=json.loads(db.execute("SELECT result_json FROM post_analyses WHERE post_id='time'").fetchone()[0])

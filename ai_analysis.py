@@ -309,6 +309,11 @@ def apply_result(db, entry, posts, analysis_id):
               'original_timezone': zone[1] if zone else None,
               'completed_announced_at': latest if entry['state'] == 'completed' else None,
               'confidence': 'ai-context' if entry.get('confidence') == 'contextual' else 'ai-direct'}
+    if entry['state'] in ('completed','cancelled'):
+        previous = db.execute('SELECT * FROM reset_events WHERE event_id=?', (event_id,)).fetchone()
+        if previous and previous['expected_at']:
+            for name in ('expected_at','window_end','time_quote','time_kind','original_timezone'):
+                fields[name] = previous[name]
     if prior_date is None or latest >= prior_date:
         names = list(fields)
         db.execute('INSERT INTO reset_events (event_id,' + ','.join(names) + ') VALUES (' + ','.join('?' for _ in range(len(names) + 1)) +
