@@ -4,7 +4,7 @@ import os
 
 STYLES = ('clear','brief','bilingual')
 TITLES = {'forecast':('🟢','重置预告'), 'reminder':('⏰','临近公告时间'),
-          'completed':('✅','作者宣布重置完成'), 'correction':('📝','时间更正'), 'cancelled':('⚪','预告取消')}
+          'completed':('✅','作者宣布重置完成'), 'correction':('📝','时间更正'), 'cancelled':('⚪','预告取消'), 'verification':('🔎','预计时间已过，请核验额度')}
 
 
 def render(message, style='clear'):
@@ -26,6 +26,8 @@ def render(message, style='clear'):
     note='公开公告不保证个人额度到账，请在自己的账号核对。'
     if message['kind']=='reminder':
         note='这是公告时间前的提醒，尚不能据此认定重置已完成。'
+    elif message['kind']=='verification':
+        note='公告预计时间已过 15 分钟，尚未收录到作者的完成公告。请自行检查额度是否恢复；这不代表已确认重置完成。'
     preview='**样式预览 · 不是新公告**\n\n' if message.get('preview') else ''
     if style=='brief':
         return preview+f'{icon} **{title}**\n\n{label}：{when}\n\n{chinese}\n\n{links}\n\n> {note}'

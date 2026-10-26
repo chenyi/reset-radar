@@ -103,7 +103,12 @@ class NotificationsTest(unittest.TestCase):
         self.assertEqual(n.deliver(self.db,next_job,lambda _:None),'sent')
 
 
-class ElapsedReminderTest(NotificationsTest):
+class ElapsedReminderTest(unittest.TestCase):
+    setUp = NotificationsTest.setUp
+    tearDown = NotificationsTest.tearDown
+    snapshot = NotificationsTest.snapshot
+    jobs = NotificationsTest.jobs
+
     def deliver_forecast(self):
         n.plan(self.db,self.snapshot(),self.at)
         job=n.claim(self.db,self.snapshot(),self.at+timedelta(seconds=2))

@@ -51,7 +51,7 @@ def material(event):
 
 def queue(db, channel, event, revision, kind, due):
     title = {'forecast':'重置预告', 'reminder':'重置时间提醒', 'completed':'作者宣布重置完成',
-             'correction':'重置时间更正', 'cancelled':'重置公告取消'}[kind]
+             'correction':'重置时间更正', 'cancelled':'重置公告取消', 'verification':'预计时间已过，请核验额度'}[kind]
     deadline = event.get('window_end') or event.get('expected_at')
     label = '预计截止时间' if event.get('window_end') or event.get('time_kind') == 'deadline' else '预计时间'
     lines = [title]
@@ -97,7 +97,7 @@ def plan(db, snapshot, at=None):
                 # A new channel adopts history as a baseline; only future reminders may be queued.
                 fresh_event = stamp(event.get('activity_at') or event['published_at']) >= stamp(channel['created_at'])
                 if changed:
-                    db.execute("UPDATE notification_jobs SET status='cancelled' WHERE channel_id=? AND event_id=? AND kind IN ('forecast','reminder','correction') AND status='pending'",
+                    db.execute("UPDATE notification_jobs SET status='cancelled' WHERE channel_id=? AND event_id=? AND kind IN ('forecast','reminder','correction','verification') AND status='pending'",
                                (channel['channel_id'], event['event_id']))
                 if event.get('type') == 'reset':
                     kind = None
@@ -111,10 +111,16 @@ def plan(db, snapshot, at=None):
                     if kind:
                         queue(db, channel['channel_id'], event, revision, kind, at)
                     upcoming = snapshot.get('summary',{}).get('upcoming')
-                    if deadline and upcoming and upcoming['event_id'] == event['event_id'] and not snapshot['summary']['stale']:
-                        due = stamp(deadline) - timedelta(minutes=15)
+                    latest = snapshot.get('summary',{}).get('latest') or upcoming
+                    if (deadline and latest and latest['event_id'] == event['event_id']
+                            and state in ('announced','scheduled') and not snapshot['summary']['stale']):
+                        if upcoming and upcoming['event_id'] == event['event_id']:
+                            due = stamp(deadline) - timedelta(minutes=15)
+                            if due > at:
+                                queue(db, channel['channel_id'], event, revision, 'reminder', due)
+                        due = stamp(deadline) + timedelta(minutes=15)
                         if due > at:
-                            queue(db, channel['channel_id'], event, revision, 'reminder', due)
+                            queue(db, channel['channel_id'], event, revision, 'verification', due)
                 db.execute('''INSERT INTO notification_events VALUES (?,?,?,?) ON CONFLICT(channel_id,event_id)
                   DO UPDATE SET revision=excluded.revision,body=excluded.body''',
                   (channel['channel_id'],event['event_id'],revision,json.dumps(current)))
@@ -127,12 +133,19 @@ def claim(db, snapshot, at=None):
             db.budget_lock('notification-claim')
         jobs = db.execute("SELECT j.* FROM notification_jobs j JOIN notification_channels c USING(channel_id) WHERE j.status='pending' AND c.enabled=1 AND j.scheduled_at<=? ORDER BY j.scheduled_at", (utc(at),)).fetchall()
         for job in jobs:
-            if job['kind'] == 'reminder':
-                upcoming = snapshot.get('summary',{}).get('upcoming')
-                deadline = (upcoming or {}).get('target_at')
-                valid = (not snapshot['summary']['stale'] and upcoming and upcoming['event_id']==job['event_id']
-                         and deadline and stamp(deadline) > at)
+            if job['kind'] in ('reminder','verification'):
                 event = next((e for e in snapshot['events'] if e['event_id']==job['event_id']), None)
+                if job['kind'] == 'reminder':
+                    upcoming = snapshot.get('summary',{}).get('upcoming')
+                    deadline = (upcoming or {}).get('target_at')
+                    valid = (not snapshot['summary']['stale'] and upcoming and upcoming['event_id']==job['event_id']
+                             and deadline and stamp(deadline) > at)
+                else:
+                    latest = snapshot.get('summary',{}).get('latest')
+                    deadline = (event or {}).get('window_end') or (event or {}).get('expected_at')
+                    valid = (not snapshot['summary']['stale'] and latest and latest['event_id']==job['event_id']
+                             and event and event['state'] in ('announced','scheduled')
+                             and deadline and stamp(deadline) + timedelta(minutes=15) <= at)
                 valid = valid and event and hashlib.sha256(json.dumps(material(event),sort_keys=True).encode()).hexdigest()==job['revision']
                 if not valid:
                     db.execute("UPDATE notification_jobs SET status='cancelled' WHERE job_id=?",(job['job_id'],))
