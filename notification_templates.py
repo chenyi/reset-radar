@@ -12,7 +12,8 @@ def render(message, style='clear'):
         return message['text']
     icon,title=TITLES[message['kind']]
     post=message['post']
-    chinese=post.get('text_zh') or '作者发布了额度重置相关消息，中文译文暂不可用，请查看原文。'
+    chinese=post.get('text_zh') or post.get('text') or '作者发布了额度重置相关消息，请查看原文。'
+    content_label='Tibo 消息 · 中文译文' if post.get('text_zh') else '作者原文 · 中文译文暂不可用'
     target=message.get('target_at')
     label=message.get('time_label','预计时间')
     when='时间尚未明确'
@@ -28,8 +29,8 @@ def render(message, style='clear'):
     preview='**样式预览 · 不是新公告**\n\n' if message.get('preview') else ''
     if style=='brief':
         return preview+f'{icon} **{title}**\n\n{label}：{when}\n\n{chinese}\n\n{links}\n\n> {note}'
-    result=f'### {icon} {title}\n\n**{label}**\n> {when}\n\n**Tibo 消息 · 中文译文**\n\n{chinese}\n\n'
-    if style=='bilingual':
+    result=f'### {icon} {title}\n\n**{label}**\n> {when}\n\n**{content_label}**\n\n{chinese}\n\n'
+    if style=='bilingual' and post.get('text_zh'):
         result+='**作者原文**\n\n'+post.get('text','')+'\n\n'
     result=result+links+'\n\n---\n\n'+note
     return preview+result

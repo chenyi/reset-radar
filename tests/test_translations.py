@@ -103,10 +103,10 @@ class NotificationStylesTest(unittest.TestCase):
         self.assertTrue(render(self.message).startswith('**样式预览 · 不是新公告**'))
         self.assertTrue(render(self.message,'brief').startswith('**样式预览 · 不是新公告**'))
 
-    def test_missing_translation_has_chinese_fallback(self):
+    def test_missing_translation_preserves_original_fallback(self):
         del self.message['post']['text_zh']
         self.assertIn('中文译文暂不可用',render(self.message))
-        self.assertNotIn('Landing tomorrow',render(self.message))
+        self.assertIn('Landing tomorrow',render(self.message))
 
     def test_configured_https_origin_overrides_a_queued_legacy_origin(self):
         self.message['origin']='http://47.237.1.108'
