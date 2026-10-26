@@ -35,7 +35,7 @@ class UndatedForecastTest(unittest.TestCase):
     def test_request_question_negation_and_card_do_not_become_new_reset_announcements(self):
         for text in ['I hope today is a reset.','Today is a reset?','Today is not a reset.',
                      'I demand a reset.','We are handing out reset cards today.',
-                     'Today is a reset. Cancelled.']:
+                     'Today is a reset. Cancelled.','Today is a reset. Just kidding.']:
             with self.subTest(text=text):
                 post=dict(self.post,text=text)
                 result=a.validate({'post_id':post['post_id'],'relevant':False},{post['post_id']:post},{post['post_id']})

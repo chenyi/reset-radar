@@ -112,7 +112,7 @@ def time_from_evidence(value, posts):
 
 
 def reset_announcement_supported(text):
-    if re.search(r'\b(?:cancelled|canceled|not happening)\b', text, re.I):
+    if re.search(r'\b(?:cancelled|canceled|not happening|just kidding|joking)\b', text, re.I):
         return False
     sentences = re.split(r'(?<=[.!])\s+', text.strip().replace('’', "'"))
     pattern = (r"(?:Day\s+\d+\s*/\s*)?(?:But\s+)?"
