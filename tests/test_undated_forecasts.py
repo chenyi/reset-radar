@@ -1,7 +1,5 @@
 """Replay Day21's misclassified original and its notification lifecycle."""
-import copy
 import json
-import os
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
